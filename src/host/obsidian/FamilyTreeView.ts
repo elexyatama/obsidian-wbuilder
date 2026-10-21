@@ -49,6 +49,17 @@ export class FamilyTreeView extends ItemView {
 	}
 
 	override async onOpen(): Promise<void> {
+		try {
+			this.buildUi();
+		} catch (error) {
+			// show what went wrong instead of leaving a blank tab
+			console.error("WBuilder: family tree failed to open", error);
+			this.contentEl.empty();
+			this.contentEl.createEl("p", { text: `The family tree could not be opened: ${String(error)}`, cls: "wb-error" });
+		}
+	}
+
+	private buildUi(): void {
 		const { contentEl, world } = this;
 		contentEl.empty();
 		contentEl.addClass("wb-family");
@@ -68,7 +79,7 @@ export class FamilyTreeView extends ItemView {
 		const stage = contentEl.createDiv({ cls: "wb-family-stage" });
 		this.message = stage.createDiv({ cls: "wb-family-message" });
 		this.renderer = new FamilyTreeRenderer(stage, {
-			onOpen: (person) => this.open(person),
+			onOpen: (person) => this.openPerson(person),
 			onRefocus: (person) => {
 				if (!person.path) return;
 				this.focusPath = person.path;
@@ -95,7 +106,11 @@ export class FamilyTreeView extends ItemView {
 		this.refreshTimer = window.setTimeout(() => this.refresh(), 120);
 	}
 
-	private open(person: FamilyPerson): void {
+	/**
+	 * Not called `open`: Obsidian calls view.open(container) to attach every view and run its
+	 * onOpen. A method with that name here replaced it and left the tab permanently blank.
+	 */
+	private openPerson(person: FamilyPerson): void {
 		if (person.path) {
 			this.world.bus.emit("open-note", { path: person.path });
 			return;

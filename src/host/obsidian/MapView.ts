@@ -60,7 +60,7 @@ export class MapView extends TextFileView {
 			return;
 		}
 		this.mapData = parsed.data;
-		this.mount(parsed.data);
+		this.mountScreen(parsed.data);
 	}
 
 	clear(): void {
@@ -86,11 +86,11 @@ export class MapView extends TextFileView {
 		this.screen = null;
 	}
 
-	private mount(data: MapData): void {
+	private mountScreen(data: MapData): void {
 		if (this.screen) this.camera = this.screen.getCamera();
 		this.screen?.destroy();
 		const grid = TileGrid.generate(data, data.edits);
-		this.screen = new MapScreen(this.contentEl, this.host(), data, grid);
+		this.screen = new MapScreen(this.contentEl, this.screenHost(), data, grid);
 		if (this.camera) this.screen.setCamera(this.camera);
 		if (this.pendingFocus) {
 			this.screen.focusTile(this.pendingFocus.x, this.pendingFocus.y);
@@ -102,7 +102,7 @@ export class MapView extends TextFileView {
 		}
 	}
 
-	private host(): MapScreenHost {
+	private screenHost(): MapScreenHost {
 		const { world } = this;
 		return {
 			index: world.index,
