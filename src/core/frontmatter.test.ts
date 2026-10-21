@@ -79,11 +79,41 @@ describe("parseNode", () => {
 		expect(parentsOf([])).toEqual([]);
 	});
 
+	it("accepts numbers typed into text properties", () => {
+		const result = parseNode({ type: "character", map: "world", x: "12", y: " 34 ", born: "300", died: "360" });
+		expect(result.kind === "node" && [result.fields.x, result.fields.y, result.fields.start, result.fields.end]).toEqual([12, 34, 300, 360]);
+		expect(parseNode({ type: "character", locations: [{ year: "5", x: "1", y: "2" }] })).toMatchObject({
+			kind: "node",
+			fields: { locations: [{ year: 5, x: 1, y: 2 }] },
+		});
+	});
+
+	it("splits several parents written in one text value", () => {
+		const parentsOf = (parents: unknown) => {
+			const r = parseNode({ type: "character", parents });
+			return r.kind === "node" ? r.fields.parents : null;
+		};
+		expect(parentsOf("[[Alaric]], [[Beatrix]]")).toEqual(["[[Alaric]]", "[[Beatrix]]"]);
+		expect(parentsOf("Alaric, Beatrix")).toEqual(["Alaric", "Beatrix"]);
+		expect(parentsOf("Alaric; Beatrix")).toEqual(["Alaric", "Beatrix"]);
+		expect(parentsOf(["[[A]] and [[B]]", "C"])).toEqual(["[[A]]", "[[B]]", "C"]);
+		expect(parentsOf("[[Folder/Alaric|the lord]]")).toEqual(["[[Folder/Alaric|the lord]]"]);
+	});
+
+	it("words problems in plain language", () => {
+		const issues = (fm: object) => {
+			const r = parseNode(fm);
+			return r.kind === "invalid" ? r.issues : [];
+		};
+		expect(issues({ type: "character", born: "long ago" })).toEqual(["start (or born) must be a number, such as 300"]);
+		expect(issues({ map: "world", x: "twelve", y: 1 })).toEqual(["x must be a whole number"]);
+	});
+
 	it("reports bad data instead of guessing", () => {
 		for (const fm of [
 			{ map: "world", x: 1 },
 			{ map: "world", x: 1.5, y: 2 },
-			{ map: "world", x: "12", y: 2 },
+			{ map: "world", x: "twelve", y: 2 },
 			{ map: "", x: 1, y: 2 },
 			{ type: "character", start: "long ago" },
 			{ type: "character", start: 50, end: 10 },

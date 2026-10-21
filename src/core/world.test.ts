@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { describeNote } from "./describe";
 import { assignGenerations, buildFamilyGraph, extractFamily, type FamilyGraph } from "./family";
 import { baseName, linkTarget } from "./links";
 import { buildFrontmatter, buildNoteText, sanitizeNoteName, yamlScalar } from "./nodeTemplate";
@@ -100,6 +101,26 @@ describe("node template", () => {
 		expect(sanitizeNoteName('  The "Old": Keep? #1 ')).toBe("The Old Keep 1");
 		expect(sanitizeNoteName("a/b\\c")).toBe("abc");
 		expect(sanitizeNoteName("...")).toBe("");
+	});
+});
+
+describe("describeNote", () => {
+	it("explains a note that isn't part of the world, or has unreadable properties", () => {
+		expect(describeNote("Plain", undefined, [], [], () => null).join("\n")).toContain("Not part of the world yet");
+		const bad = describeNote("Bad", undefined, ["start: Invalid input"], [], () => null);
+		expect(bad.join("\n")).toContain("Can't read this note's properties");
+		expect(bad.join("\n")).toContain("start: Invalid input");
+	});
+
+	it("shows what a character note resolved to", () => {
+		const node = person("Cedric", ["[[Alaric]]", "[[Fenn]]"], { start: 330, locations: [{ year: 330, x: 1, y: 1 }] });
+		const text = describeNote("Cedric", node, [], ["a warning"], (target) => (target === "Alaric" ? "World/Alaric.md" : null)).join("\n");
+		expect(text).toContain("type: character");
+		expect(text).toContain("years 330 to …");
+		expect(text).toContain("Alaric → World/Alaric.md");
+		expect(text).toContain("Fenn → no note with that name");
+		expect(text).toContain("locations: 1 entry");
+		expect(text).toContain("⚠ a warning");
 	});
 });
 

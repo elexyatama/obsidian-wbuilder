@@ -29,6 +29,16 @@ const schema = z.object({
 	end: z.optional(z.number()),
 });
 
+/** What to tell the user when a property has the wrong kind of value. */
+const FIELD_HINTS: Record<string, string> = {
+	map: "must be text, such as world",
+	x: "must be a whole number",
+	y: "must be a whole number",
+	icon: "must be text",
+	start: "(or born) must be a number, such as 300",
+	end: "(or died) must be a number, such as 360",
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -45,9 +55,25 @@ function firstString(value: unknown): string | undefined {
 	return undefined;
 }
 
+/**
+ * One list entry may hold several names, because a plain text property is one string:
+ * "[[Alaric]], [[Beatrix]]" gives both links, and "Alaric, Beatrix" is split on commas.
+ */
+function splitNames(text: string): string[] {
+	const links = text.match(/\[\[[^\]]+\]\]/g);
+	if (links) return links;
+	return text.split(/[;,]/).map((part) => part.trim()).filter(Boolean);
+}
+
 function readParents(value: unknown): string[] {
 	const raw = Array.isArray(value) ? value.map(firstString) : [firstString(value)];
-	return [...new Set(raw.filter((p): p is string => p !== undefined))];
+	const names = raw.flatMap((item) => (item === undefined ? [] : splitNames(item)));
+	return [...new Set(names)];
+}
+
+/** "300" typed into a text property is still the number 300. Anything else is passed on to be rejected. */
+function asNumber(value: unknown): unknown {
+	return typeof value === "string" && /^\s*-?\d+(\.\d+)?\s*$/.test(value) ? Number(value) : value;
 }
 
 /**
@@ -81,16 +107,19 @@ export function parseNode(frontmatter: unknown): NodeParseResult {
 
 	const parsed = schema.safeParse({
 		map: hasMap ? frontmatter.map : undefined,
-		x: frontmatter.x ?? frontmatter.tile_x ?? undefined,
-		y: frontmatter.y ?? frontmatter.tile_y ?? undefined,
+		x: asNumber(frontmatter.x ?? frontmatter.tile_x ?? undefined),
+		y: asNumber(frontmatter.y ?? frontmatter.tile_y ?? undefined),
 		icon: frontmatter.icon ?? undefined,
-		start: frontmatter.start ?? frontmatter.born ?? undefined,
-		end: frontmatter.end ?? frontmatter.died ?? undefined,
+		start: asNumber(frontmatter.start ?? frontmatter.born ?? undefined),
+		end: asNumber(frontmatter.end ?? frontmatter.died ?? undefined),
 	});
 	if (!parsed.success) {
 		return {
 			kind: "invalid",
-			issues: parsed.error.issues.map((i) => `${i.path.join(".") || "frontmatter"}: ${i.message}`),
+			issues: parsed.error.issues.map((i) => {
+				const key = String(i.path[0] ?? "");
+				return `${key || "properties"} ${FIELD_HINTS[key] ?? i.message}`;
+			}),
 		};
 	}
 

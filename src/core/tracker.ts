@@ -35,10 +35,12 @@ export function parseLocationEntry(raw: unknown): LocationEntry | null {
 		}
 		return null;
 	}
-	if (isRecord(raw) && typeof raw.year === "number" && Number.isFinite(raw.year)) {
-		if (raw.missing === true) return { year: raw.year, missing: true };
-		if (Number.isInteger(raw.x) && Number.isInteger(raw.y)) {
-			const entry: LocationEntry = { year: raw.year, x: raw.x as number, y: raw.y as number };
+	if (isRecord(raw)) {
+		const [year, x, y] = [raw.year, raw.x, raw.y].map((v) => (typeof v === "string" && v.trim() !== "" ? Number(v) : v));
+		if (typeof year !== "number" || !Number.isFinite(year)) return null;
+		if (raw.missing === true) return { year, missing: true };
+		if (Number.isInteger(x) && Number.isInteger(y)) {
+			const entry: LocationEntry = { year, x: x as number, y: y as number };
 			if (typeof raw.map === "string" && raw.map) entry.map = raw.map;
 			return entry;
 		}

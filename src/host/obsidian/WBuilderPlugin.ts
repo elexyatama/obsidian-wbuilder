@@ -1,4 +1,5 @@
 import { MarkdownView, Menu, Notice, Plugin, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
+import { describeNote } from "../../core/describe";
 import { BUILTIN_STICKERS, defaultStickerFor } from "../../core/stickers";
 import { createMapData, MAP_EXTENSION, serializeMapData } from "../../core/mapFile";
 import { createNavigationBus } from "../../core/navigation";
@@ -73,13 +74,19 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 				return true;
 			},
 		});
+		// Offered for any open note, so the command is always findable; if the note isn't a character
+		// it says why instead of silently not being in the list.
 		this.addCommand({
 			id: "show-family-tree",
 			name: "Show family tree of active note",
 			checkCallback: (checking) => {
-				const node = this.activeNode();
-				if (!node || !hasFamily(node)) return false;
-				if (!checking) void this.showFamilyTree(node.path);
+				const file = this.activeNote();
+				if (!file) return false;
+				if (!checking) {
+					const node = this.index.get(file.path);
+					if (node && hasFamily(node)) void this.showFamilyTree(node.path);
+					else this.explainNote(file, "have a family tree");
+				}
 				return true;
 			},
 		});
@@ -87,9 +94,23 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 			id: "track-character",
 			name: "Track active character on map",
 			checkCallback: (checking) => {
-				const node = this.activeNode();
-				if (!node || node.type !== "character") return false;
-				if (!checking) void this.trackOnMap(node.path);
+				const file = this.activeNote();
+				if (!file) return false;
+				if (!checking) {
+					const node = this.index.get(file.path);
+					if (node && node.type === "character") void this.trackOnMap(node.path);
+					else this.explainNote(file, "be tracked");
+				}
+				return true;
+			},
+		});
+		this.addCommand({
+			id: "check-note",
+			name: "Show how WBuilder reads the active note",
+			checkCallback: (checking) => {
+				const file = this.activeNote();
+				if (!file) return false;
+				if (!checking) this.explainNote(file);
 				return true;
 			},
 		});
@@ -140,6 +161,26 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		const leaf = this.lastNoteLeaf;
 		if (leaf && workspace.getLeavesOfType("markdown").includes(leaf)) return (leaf.view as MarkdownView).file;
 		return null;
+	}
+
+	/** Tells the user how WBuilder read a note; `cannot` adds the reason a feature isn't available for it. */
+	private explainNote(file: TFile, cannot?: string): void {
+		const node = this.index.get(file.path);
+		const lines = describeNote(
+			file.basename,
+			node,
+			this.index.issuesFor(file.path),
+			this.index.warningsFor(file.path),
+			(target, from) => this.app.metadataCache.getFirstLinkpathDest(target, from)?.path ?? null,
+		);
+		if (cannot) {
+			const hint =
+				!node || node.type !== "character"
+					? `This note can't ${cannot} yet. Add "type: character" to its properties${cannot.includes("family") ? ' and "parents" with links to its parents' : ""}.`
+					: `This note can't ${cannot}.`;
+			lines.unshift(hint, "");
+		}
+		new Notice(lines.join("\n"), 15000);
 	}
 
 	private activeNode(): NodeRecord | undefined {
@@ -256,11 +297,16 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 	}
 
 	private async showFamilyTree(path: string): Promise<void> {
-		const { workspace } = this.app;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_FAMILY)[0];
-		if (!leaf) leaf = workspace.getLeaf("tab");
-		await leaf.setViewState({ type: VIEW_TYPE_FAMILY, active: true, state: { focus: path } });
-		await workspace.revealLeaf(leaf);
+		try {
+			const { workspace } = this.app;
+			let leaf = workspace.getLeavesOfType(VIEW_TYPE_FAMILY)[0];
+			if (!leaf) leaf = workspace.getLeaf("tab");
+			await leaf.setViewState({ type: VIEW_TYPE_FAMILY, active: true, state: { focus: path } });
+			await workspace.revealLeaf(leaf);
+		} catch (error) {
+			console.error("WBuilder: could not open the family tree", error);
+			new Notice(`WBuilder: could not open the family tree (${error instanceof Error ? error.message : String(error)}). Details are in the developer console.`);
+		}
 	}
 
 	/**

@@ -1,6 +1,7 @@
 export * from "./base64";
 export * from "./brush";
 export * from "./camera";
+export * from "./describe";
 export * from "./emitter";
 export * from "./family";
 export * from "./frontmatter";

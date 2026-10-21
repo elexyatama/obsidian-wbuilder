@@ -57,7 +57,7 @@ Which mentions count, in the event's text:
 
 A `present: ["[[Alaric]]"]` list in the event's frontmatter counts like `@`. Links inside code, embeds (`![[...]]`) and frontmatter are ignored. A `locations` line the plugin can't read shows a warning (⚠) next to the character in the panel.
 
-Commands: **Open map**, **Create new map**, **Reveal active note on map**, **Show family tree of active note**, **Track active character on map**. These also work while the map tab is focused (they use the last note you had open). Settings: notes folder (default `World`), sticker folder (default `Stickers`), and how event mentions place characters.
+Commands: **Open map**, **Create new map**, **Reveal active note on map**, **Show family tree of active note**, **Track active character on map**, **Show how WBuilder reads the active note**. These also work while the map tab is focused (they use the last note you had open). The family tree and track commands are offered for any note; if it isn't a character they say what to add. **Show how WBuilder reads the active note** lists the type, position, years, how each parent link resolved, and any problem with the properties. Numbers typed into text properties (`born: "300"`) are accepted, and several parents may share one value (`parents: "[[Alaric]], [[Beatrix]]"` or `Alaric, Beatrix`). Settings: notes folder (default `World`), sticker folder (default `Stickers`), and how event mentions place characters.
 
 ## Layout
 

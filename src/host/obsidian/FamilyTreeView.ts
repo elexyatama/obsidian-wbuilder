@@ -107,6 +107,16 @@ export class FamilyTreeView extends ItemView {
 	}
 
 	private refresh(): void {
+		try {
+			this.draw();
+		} catch (error) {
+			// show what went wrong instead of leaving a blank view
+			console.error("WBuilder: family tree failed to draw", error);
+			this.showMessage(`The family tree could not be drawn: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	private draw(): void {
 		const { renderer } = this;
 		if (!renderer) return;
 		const { index, timeline } = this.world;
@@ -115,10 +125,13 @@ export class FamilyTreeView extends ItemView {
 		const ids = this.focusPath ? extractFamily(graph, this.focusPath, this.mode) : new Set<string>();
 		if (ids.size === 0) {
 			renderer.render({ nodes: [], edges: [], width: 0, height: 0 }, graph);
+			const issues = this.focusPath ? index.issuesFor(this.focusPath) : [];
 			this.showMessage(
-				this.focusPath
-					? "This note isn't a character with family links yet. Set type: character and add parents."
-					: "Open a character note and run “Show family tree of active note”.",
+				!this.focusPath
+					? "Open a character note and run “Show family tree of active note”."
+					: issues.length > 0
+						? `Can't read this note's properties: ${issues.join("; ")}`
+						: "This note isn't a character with family links yet. Set type: character and add parents.",
 			);
 			return;
 		}
