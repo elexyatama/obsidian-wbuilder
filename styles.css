@@ -1,0 +1,275 @@
+/* ---------- map tab ---------- */
+
+.wb-map {
+	padding: 0 !important;
+	overflow: hidden;
+	position: relative;
+	outline: none;
+}
+
+.wb-map [hidden] {
+	display: none !important;
+}
+
+.wb-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+	touch-action: none;
+	cursor: grab;
+}
+
+.wb-canvas.is-over-pin {
+	cursor: pointer;
+}
+
+.wb-canvas.is-paint {
+	cursor: crosshair;
+}
+
+.wb-canvas.is-dragging {
+	cursor: grabbing;
+}
+
+.wb-panels {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: calc(100% - 16px);
+	max-height: calc(100% - 64px);
+	pointer-events: none;
+}
+
+.wb-panels > * {
+	pointer-events: auto;
+}
+
+.wb-toolbar,
+.wb-palette,
+.wb-timeline,
+.wb-status {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-s);
+}
+
+.wb-toolbar {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 6px;
+}
+
+.wb-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.wb-toolbar button {
+	height: auto;
+	padding: 3px 10px;
+	font-size: var(--font-ui-small);
+}
+
+.wb-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-hint {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-toolbar input[type="range"] {
+	width: 110px;
+}
+
+.wb-palette {
+	padding: 6px;
+	overflow-y: auto;
+	max-width: 330px;
+}
+
+.wb-sticker-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+	margin-bottom: 4px;
+}
+
+.wb-sticker {
+	width: 36px;
+	height: 36px;
+	padding: 2px !important;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: grab;
+}
+
+.wb-sticker img {
+	max-width: 28px;
+	max-height: 28px;
+}
+
+.wb-bottom {
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	bottom: 8px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	pointer-events: none;
+}
+
+.wb-bottom > * {
+	pointer-events: auto;
+}
+
+.wb-status {
+	padding: 3px 8px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	min-width: 8em;
+	min-height: 1.6em;
+	pointer-events: none;
+}
+
+.wb-timeline {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 10px;
+	min-width: 0;
+}
+
+.wb-timeline-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+	font-size: var(--font-ui-small);
+}
+
+.wb-timeline input[type="range"] {
+	flex: 1;
+	min-width: 60px;
+}
+
+.wb-timeline input[type="number"] {
+	width: 5.5em;
+}
+
+.wb-error {
+	padding: var(--size-4-4);
+	color: var(--text-error);
+}
+
+/* ---------- family tree ---------- */
+
+.wb-family {
+	display: flex;
+	flex-direction: column;
+	padding: 0 !important;
+	overflow: hidden;
+}
+
+.wb-family [hidden] {
+	display: none !important;
+}
+
+.wb-family-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.wb-family-stage {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+}
+
+.wb-family-message {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--size-4-8);
+	text-align: center;
+	color: var(--text-muted);
+	pointer-events: none;
+}
+
+svg.wb-tree {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	cursor: grab;
+	user-select: none;
+	touch-action: none;
+}
+
+.wb-tree-edge {
+	fill: none;
+	stroke: var(--text-faint);
+	stroke-width: 1.5;
+}
+
+.wb-tree-union {
+	fill: var(--text-muted);
+}
+
+.wb-tree-node {
+	cursor: pointer;
+}
+
+.wb-tree-node rect {
+	fill: var(--background-secondary);
+	stroke: var(--background-modifier-border-hover);
+	stroke-width: 1.5;
+}
+
+.wb-tree-node:hover rect {
+	stroke: var(--interactive-accent);
+}
+
+.wb-tree-node.is-focus rect {
+	stroke: var(--interactive-accent);
+	stroke-width: 3;
+}
+
+.wb-tree-node.is-unresolved rect {
+	fill: transparent;
+	stroke-dasharray: 5 4;
+}
+
+.wb-tree-node.is-dimmed {
+	opacity: 0.3;
+}
+
+.wb-tree-name {
+	fill: var(--text-normal);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.wb-tree-years {
+	fill: var(--text-muted);
+	font-size: 11px;
+}
