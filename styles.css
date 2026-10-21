@@ -51,6 +51,7 @@
 
 .wb-toolbar,
 .wb-palette,
+.wb-characters,
 .wb-timeline,
 .wb-status {
 	background: var(--background-secondary);
@@ -121,37 +122,122 @@
 	max-height: 28px;
 }
 
+/* The coordinate readout sits on its own line above the timeline, so a long readout can never resize the timeline. */
 .wb-bottom {
 	position: absolute;
 	left: 8px;
 	right: 8px;
 	bottom: 8px;
 	display: flex;
-	align-items: center;
-	gap: 8px;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
 	pointer-events: none;
 }
 
-.wb-bottom > * {
+.wb-bottom > .wb-timeline {
 	pointer-events: auto;
 }
 
 .wb-status {
+	align-self: flex-start;
+	max-width: 100%;
 	padding: 3px 8px;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
-	min-width: 8em;
+	/* keeps its height when empty so nothing jumps when the cursor leaves the map */
 	min-height: 1.6em;
+	min-width: 12em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	pointer-events: none;
 }
 
 .wb-timeline {
-	flex: 1;
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	padding: 4px 10px;
 	min-width: 0;
+}
+
+.wb-timeline .wb-hint {
+	white-space: nowrap;
+}
+
+/* ---------- characters panel ---------- */
+
+.wb-characters {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 6px;
+	width: 300px;
+	max-width: 100%;
+	max-height: 45vh;
+	overflow-y: auto;
+}
+
+.wb-char-filter {
+	flex: 1;
+	min-width: 0;
+}
+
+.wb-char-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.wb-char {
+	padding: 3px 4px;
+	border-radius: var(--radius-s);
+}
+
+.wb-char.is-selected {
+	background: var(--background-modifier-hover);
+}
+
+.wb-char-top {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.wb-char-label {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+}
+
+.wb-char-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wb-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	flex: none;
+}
+
+.wb-char-status {
+	margin: 0 0 0 22px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-toolbar button.wb-mini,
+.wb-characters button.wb-mini {
+	height: auto;
+	padding: 1px 7px;
+	font-size: var(--font-ui-smaller);
 }
 
 .wb-timeline-toggle {

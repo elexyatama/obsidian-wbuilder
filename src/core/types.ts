@@ -45,6 +45,29 @@ export interface NodeRecord {
 	end?: number;
 	/** Parent links as written in the note, e.g. "[[Alice]]". */
 	parents: string[];
+	/** Where a character is from given years on (the `locations` list), sorted by year. */
+	locations: LocationEntry[];
+	/** Links in an event's text (and `present:` list) that may place characters there. */
+	mentions: Mention[];
+}
+
+/**
+ * From `year` on, a character is at (x, y), or is missing. `map` is optional: without it
+ * the entry applies to whichever map is being viewed.
+ */
+export type LocationEntry = { year: number } & ({ missing: true } | { missing?: false; map?: string; x: number; y: number });
+
+/**
+ * How a link in an event is marked:
+ * "present" = written `@[[Name]]` (or listed under `present:`), "absent" = `~[[Name]]`,
+ * "plain" = an ordinary `[[Name]]`.
+ */
+export type MentionMark = "present" | "absent" | "plain";
+
+export interface Mention {
+	/** Link target without brackets, alias or heading, e.g. "Alaric". */
+	target: string;
+	mark: MentionMark;
 }
 
 /** A node that is placed on a map tile. */

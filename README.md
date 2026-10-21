@@ -10,7 +10,8 @@ An Obsidian plugin for worldbuilders: Markdown notes tied to an interactive, edi
 - **Stickers.** 31 built-in stickers (including a hand-drawn well) plus any image in your sticker folder. Click one then click the map, or drag it onto the map.
 - **Node types.** `place`, `structure`, `character`, `creature`, `faction`, `event`, `item` (or your own). Each has its own badge color and default sticker.
 - **Timeline.** Give notes a `start` and/or `end` year (indefinite by default). Turn the timeline on, drag the slider, and the map shows only what exists in that year.
-- **Family trees.** Characters list `parents`; *Show family tree of active note* draws the tree (ancestors, descendants or the whole family). Parents without a note appear as dashed boxes you can click to create.
+- **Family trees.** Characters list `parents`; the tree shows ancestors, descendants or the whole family. Parents without a note appear as dashed boxes you can click to create. Open it with the command **Show family tree of active note**, by right-clicking a character note (file list or editor), by right-clicking a character's pin on the map, or with the **Tree** button in the Characters panel.
+- **Character tracker.** The **Characters** panel on the map lists every character. Tick one or more and drag the timeline: each moves to where they are in that year (ring colored per character). **Show paths** draws their routes (solid = already travelled, dashed = ahead, arrows for direction; the line breaks while a character is missing). Where a character is comes from three places, see below.
 
 ## Note format
 
@@ -29,9 +30,34 @@ parents: ["[[Alaric]]", "[[Beatrix]]"]
 ---
 ```
 
-A note is part of the world if it has `map`, a known `type`, or `parents`; other notes are ignored. Bad coordinates or `start` after `end` hide the pin rather than guessing.
+A note is part of the world if it has `map`, a known `type`, `parents` or `locations`; other notes are ignored. Bad coordinates or `start` after `end` hide the pin rather than guessing.
 
-Commands: **Open map**, **Create new map**, **Reveal active note on map**, **Show family tree of active note**. Settings: notes folder (default `World`) and sticker folder (default `Stickers`).
+### Where is a character in a given year?
+
+A character is shown only while alive (`start`/`born` to `end`/`died`). In a year they are at the **latest entry on or before it** (they stay put until the next one), from these sources:
+
+1. **Their `locations` list.** One line per change, `"year: map x,y"` (map optional) or `"year: missing"`:
+   ```yaml
+   locations:
+     - "315: world 92,32"
+     - "325: missing"        # gone from 325 until the next entry
+     - "332: world 86,40"
+   ```
+   Before the first entry they are at their note's own `map`/`x`/`y`, if it has one. You can write entries by hand, or on the map: tick the character, set the timeline to a year, right-click a tile → *Place … here in year …* / *… goes missing from year …*.
+2. **Events that mention them.** An event note (`type: event`, with a map tile and a `start` year) places the characters it mentions at its tile in its start year. An entry in a character's own list for the same year wins over an event.
+3. **Their own `map`/`x`/`y`.** The fallback described above.
+
+Which mentions count, in the event's text:
+
+| Written | Meaning |
+|---|---|
+| `@[[Alaric]]` | was there (always counts) |
+| `~[[Cedric]]` | only mentioned, wasn't there (never counts, even if the same event also links them plainly) |
+| `[[Beatrix]]` | follows the setting *Characters mentioned in events*: **every link counts unless marked `~`** (default), or **only `@` links count** |
+
+A `present: ["[[Alaric]]"]` list in the event's frontmatter counts like `@`. Links inside code, embeds (`![[...]]`) and frontmatter are ignored. A `locations` line the plugin can't read shows a warning (⚠) next to the character in the panel.
+
+Commands: **Open map**, **Create new map**, **Reveal active note on map**, **Show family tree of active note**, **Track active character on map**. These also work while the map tab is focused (they use the last note you had open). Settings: notes folder (default `World`), sticker folder (default `Stickers`), and how event mentions place characters.
 
 ## Layout
 
@@ -71,6 +97,6 @@ npm run build             # typecheck + production bundle
 
 Unit tests (core), the canvas/UI code (checked in a browser) and the plugin wiring (checked against a stubbed Obsidian API) all pass. **Not yet run inside real Obsidian**, so expect small surprises in the Obsidian-specific parts (file view registration, menus, dialogs).
 
-Known gaps: dragging a pin to move it (edit `x`/`y` for now), `wmap:` coordinate links inside note text, pinch zoom for mobile (`isDesktopOnly` stays `true`), terrain that changes over time, and spouses with no children don't appear in family trees.
+Known gaps: dragging a pin to move it (edit `x`/`y` for now), `wmap:` coordinate links inside note text, pinch zoom for mobile (`isDesktopOnly` stays `true`), terrain that changes over time, and spouses with no children don't appear in family trees. Characters are a step function between entries (no travel time between two places), and the set of tracked characters resets when you close the map.
 
 Before publishing: set `author` in `manifest.json`.

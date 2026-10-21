@@ -2,6 +2,7 @@ import { brushFootprint } from "../core/brush";
 import { Camera, type Vec2 } from "../core/camera";
 import { CHUNK_SIZE, type TileGrid } from "../core/grid";
 import { getNodeType } from "../core/nodeTypes";
+import type { TrackLine } from "../core/tracking";
 import type { Pin } from "../core/types";
 import { ChunkCache } from "./chunkCache";
 import { drawPin, drawPinLabel, pinRadius } from "./pinPainter";
@@ -34,6 +35,7 @@ export const STICKER_DRAG_PREFIX = "wbuilder-sticker:";
 const CLICK_SLOP_PX = 4;
 const LABEL_MIN_SCALE = 10;
 const BACKGROUND = "#0b1020";
+const TAU = Math.PI * 2;
 
 interface Drag {
 	id: number;
@@ -59,6 +61,8 @@ export class MapRenderer {
 	private readonly chunks: ChunkCache;
 	private readonly disposers: Array<() => void> = [];
 	private pins: Pin[] = [];
+	private lines: readonly TrackLine[] = [];
+	private rings: ReadonlyMap<string, string> = new Map();
 	private mode: RendererMode = "pan";
 	private brushRadius = 1;
 	private resolveSticker: StickerResolver = builtinResolver;
@@ -86,6 +90,18 @@ export class MapRenderer {
 	setPins(pins: readonly Pin[]): void {
 		// lower pins are drawn last so they overlap the ones behind them
 		this.pins = [...pins].sort((a, b) => a.y - b.y || a.x - b.x || a.path.localeCompare(b.path));
+		this.invalidate();
+	}
+
+	/** Journey lines of tracked characters, drawn under the pins. */
+	setTrackLines(lines: readonly TrackLine[]): void {
+		this.lines = lines;
+		this.invalidate();
+	}
+
+	/** Colored ring around the pins of tracked characters, by note path. */
+	setPinRings(rings: ReadonlyMap<string, string>): void {
+		this.rings = rings;
 		this.invalidate();
 	}
 
@@ -342,7 +358,50 @@ export class MapRenderer {
 
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		this.drawCursor();
+		this.drawLines();
 		this.drawPins(view);
+	}
+
+	/** Each leg of a journey: solid once reached, dashed and faint while still ahead, with an arrow for direction. */
+	private drawLines(): void {
+		if (this.lines.length === 0) return;
+		const { ctx, camera } = this;
+		ctx.save();
+		ctx.lineCap = "round";
+		ctx.lineJoin = "round";
+		for (const line of this.lines) {
+			ctx.strokeStyle = line.color;
+			ctx.fillStyle = line.color;
+			for (const s of line.segments) {
+				const a = camera.worldToScreen(s.x0 + 0.5, s.y0 + 0.5);
+				const b = camera.worldToScreen(s.x1 + 0.5, s.y1 + 0.5);
+				ctx.globalAlpha = s.traveled ? 0.95 : 0.45;
+				ctx.lineWidth = 3;
+				ctx.setLineDash(s.traveled ? [] : [7, 6]);
+				ctx.beginPath();
+				ctx.moveTo(a.x, a.y);
+				ctx.lineTo(b.x, b.y);
+				ctx.stroke();
+				ctx.setLineDash([]);
+
+				const mx = (a.x + b.x) / 2;
+				const my = (a.y + b.y) / 2;
+				const angle = Math.atan2(b.y - a.y, b.x - a.x);
+				ctx.beginPath();
+				ctx.moveTo(mx + Math.cos(angle) * 7, my + Math.sin(angle) * 7);
+				ctx.lineTo(mx + Math.cos(angle + 2.5) * 7, my + Math.sin(angle + 2.5) * 7);
+				ctx.lineTo(mx + Math.cos(angle - 2.5) * 7, my + Math.sin(angle - 2.5) * 7);
+				ctx.closePath();
+				ctx.fill();
+
+				for (const p of [a, b]) {
+					ctx.beginPath();
+					ctx.arc(p.x, p.y, 3.5, 0, TAU);
+					ctx.fill();
+				}
+			}
+		}
+		ctx.restore();
 	}
 
 	private drawCursor(): void {
@@ -371,11 +430,35 @@ export class MapRenderer {
 			if (pin.x + 1 < view.x0 || pin.x > view.x1 || pin.y + 1 < view.y0 || pin.y > view.y1) continue;
 			const c = camera.worldToScreen(pin.x + 0.5, pin.y + 0.5);
 			visible.push({ pin, x: c.x, y: c.y });
-			drawPin(ctx, c.x, c.y, radius, getNodeType(pin.type).color, this.resolveSticker(pin));
 		}
-		const hovered = new Set(this.hoverPins.map((p) => p.path));
+		// tracked characters (the ones with a ring) are drawn last so they sit on top of what they stand next to
+		visible.sort((a, b) => Number(this.rings.has(a.pin.path)) - Number(this.rings.has(b.pin.path)));
 		for (const { pin, x, y } of visible) {
-			if (camera.scale >= LABEL_MIN_SCALE || hovered.has(pin.path)) drawPinLabel(ctx, pin.name, x, y, radius);
+			drawPin(ctx, x, y, radius, getNodeType(pin.type).color, this.resolveSticker(pin));
+			const ring = this.rings.get(pin.path);
+			if (ring) {
+				ctx.beginPath();
+				ctx.arc(x, y, radius + 3, 0, TAU);
+				ctx.lineWidth = 3;
+				ctx.strokeStyle = ring;
+				ctx.stroke();
+			}
+		}
+
+		// one label per tile: when pins share a tile, name the top one and count the rest
+		const hovered = new Set(this.hoverPins.map((p) => p.path));
+		const byTile = new Map<string, Array<{ pin: Pin; x: number; y: number }>>();
+		for (const entry of visible) {
+			const key = `${entry.pin.x},${entry.pin.y}`;
+			const group = byTile.get(key);
+			if (group) group.push(entry);
+			else byTile.set(key, [entry]);
+		}
+		for (const group of byTile.values()) {
+			const top = group[group.length - 1];
+			if (camera.scale < LABEL_MIN_SCALE && !group.some((e) => hovered.has(e.pin.path))) continue;
+			const extra = group.length > 1 ? ` +${group.length - 1}` : "";
+			drawPinLabel(ctx, top.pin.name + extra, top.x, top.y, radius);
 		}
 	}
 }

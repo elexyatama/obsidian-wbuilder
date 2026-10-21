@@ -16,5 +16,7 @@ export * from "./nodeTypes";
 export * from "./rng";
 export * from "./stickers";
 export * from "./timeline";
+export * from "./tracker";
+export * from "./tracking";
 export * from "./treeLayout";
 export * from "./types";

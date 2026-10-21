@@ -9,6 +9,8 @@ export interface NavigationEvents {
 	"focus-tile": { map: string; x: number; y: number };
 	/** Open or focus a note in the editor (e.g. from clicking a pin). */
 	"open-note": { path: string };
+	/** Something the tracker depends on changed outside the index (a setting, or links resolving differently). */
+	"tracking-changed": null;
 }
 
 export type NavigationBus = Emitter<NavigationEvents>;

@@ -13,8 +13,19 @@ describe("parseNode", () => {
 	it("reads a placed node", () => {
 		expect(parseNode({ type: "structure", map: "world", x: 12, y: 34, icon: "castle" })).toEqual({
 			kind: "node",
-			fields: { type: "structure", map: "world", x: 12, y: 34, icon: "castle", parents: [] },
+			fields: { type: "structure", map: "world", x: 12, y: 34, icon: "castle", parents: [], locations: [], present: [] },
+			warnings: [],
 		});
+	});
+
+	it("reads locations and present, and treats a note with locations as a character", () => {
+		const result = parseNode({ locations: ["320: world 92,32", "340: missing", "bad line"], present: ["[[Alaric]]", "Beatrix"] });
+		expect(result.kind).toBe("node");
+		if (result.kind !== "node") return;
+		expect(result.fields.type).toBe("character");
+		expect(result.fields.locations).toEqual([{ year: 320, map: "world", x: 92, y: 32 }, { year: 340, missing: true }]);
+		expect(result.fields.present).toEqual(["Alaric", "Beatrix"]);
+		expect(result.warnings).toHaveLength(1);
 	});
 
 	it("defaults the type: place when placed, character when it has parents", () => {

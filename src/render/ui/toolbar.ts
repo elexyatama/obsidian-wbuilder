@@ -12,6 +12,7 @@ const TOOLS: readonly { id: Tool; label: string; hint: string }[] = [
 
 export interface ToolbarModel {
 	tool: Tool;
+	charactersOpen: boolean;
 	nodeType: string;
 	brush: Brush;
 	canUndo: boolean;
@@ -20,6 +21,8 @@ export interface ToolbarModel {
 
 export interface ToolbarActions {
 	setTool(tool: Tool): void;
+	/** Show or hide the characters panel (the tracker). */
+	toggleCharacters(): void;
 	setNodeType(id: string): void;
 	setBrush(patch: Partial<Brush>): void;
 	undo(): void;
@@ -44,6 +47,7 @@ export class Toolbar {
 	private readonly strengthWrap: HTMLElement;
 	private readonly undoButton: HTMLButtonElement;
 	private readonly redoButton: HTMLButtonElement;
+	private readonly charactersButton: HTMLButtonElement;
 
 	constructor(parent: HTMLElement, actions: ToolbarActions) {
 		this.el = h("div", { class: "wb-toolbar" });
@@ -56,6 +60,12 @@ export class Toolbar {
 			this.toolButtons.set(tool.id, button);
 			toolRow.append(button);
 		}
+		this.charactersButton = h("button", {
+			text: "Characters",
+			title: "Follow characters through time: pick who to track, see where they are each year",
+		});
+		this.charactersButton.addEventListener("click", () => actions.toggleCharacters());
+		toolRow.append(this.charactersButton);
 		this.undoButton = h("button", { text: "Undo", title: "Undo the last brush stroke (Ctrl+Z)" });
 		this.redoButton = h("button", { text: "Redo", title: "Redo (Ctrl+Shift+Z)" });
 		this.undoButton.addEventListener("click", () => actions.undo());
@@ -96,6 +106,7 @@ export class Toolbar {
 
 	update(model: ToolbarModel): void {
 		for (const [tool, button] of this.toolButtons) button.classList.toggle("mod-cta", tool === model.tool);
+		this.charactersButton.classList.toggle("mod-cta", model.charactersOpen);
 		this.placeRow.hidden = model.tool !== "place";
 		this.brushRow.hidden = model.tool !== "brush";
 		this.undoButton.hidden = this.redoButton.hidden = model.tool !== "brush";

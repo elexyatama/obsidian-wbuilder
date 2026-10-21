@@ -1,14 +1,23 @@
 // zod/mini keeps the plugin bundle small; full zod adds ~400 KB for a handful of fields.
 import * as z from "zod/mini";
+import { linkTarget } from "./links";
 import { DEFAULT_NODE_TYPE, isKnownNodeType } from "./nodeTypes";
+import { parseLocations } from "./tracker";
 import type { NodeRecord } from "./types";
 
-/** Node fields read from frontmatter. The index adds `path` and `name`. */
-export type NodeFields = Omit<NodeRecord, "path" | "name">;
+/**
+ * Node fields read from frontmatter. The index adds `path`, `name` and `mentions`
+ * (it combines `present` with the links it finds in an event's text).
+ */
+export type NodeFields = Omit<NodeRecord, "path" | "name" | "mentions"> & {
+	/** Link targets listed under `present:`. */
+	present: string[];
+};
 
 export type NodeParseResult =
 	| { kind: "none" }
-	| { kind: "node"; fields: NodeFields }
+	/** `warnings` are problems that don't stop the note being a node, such as an unreadable `locations` line. */
+	| { kind: "node"; fields: NodeFields; warnings: string[] }
 	| { kind: "invalid"; issues: string[] };
 
 const schema = z.object({
@@ -52,19 +61,23 @@ function readParents(value: unknown): string[] {
  *   start: 120              (born also accepted) omit = has always existed
  *   end: 340                (died also accepted) omit = indefinite
  *   parents: ["[[Alice]]"]  character parents, as links or plain names
+ *   locations: ["320: 12,34", "340: missing"]   where a character is, from which year (see tracker.ts)
+ *   present: ["[[Alice]]"]  characters at an event (see tracker.ts)
  *
- * A note is part of the world when it has `map`, a known `type`, or `parents`. Anything
- * else is ignored, so an unrelated `type: book` or `x: 3` in someone's vault never makes
- * a node. Bad coordinates or periods make the note invalid (its pin disappears and the
- * problem is recorded); malformed parent entries are skipped.
+ * A note is part of the world when it has `map`, a known `type`, `parents` or `locations`.
+ * Anything else is ignored, so an unrelated `type: book` or `x: 3` in someone's vault never
+ * makes a node. Bad coordinates or periods make the note invalid (its pin disappears and
+ * the problem is recorded); malformed parent or location entries are skipped with a warning.
  */
 export function parseNode(frontmatter: unknown): NodeParseResult {
 	if (!isRecord(frontmatter)) return { kind: "none" };
 
 	const parents = readParents(frontmatter.parents);
+	const { entries: locations, warnings } = parseLocations(frontmatter.locations);
+	const present = readParents(frontmatter.present).map(linkTarget).filter(Boolean);
 	const type = typeof frontmatter.type === "string" ? frontmatter.type.trim().toLowerCase() : "";
 	const hasMap = frontmatter.map !== undefined && frontmatter.map !== null;
-	if (!hasMap && parents.length === 0 && !isKnownNodeType(type)) return { kind: "none" };
+	if (!hasMap && parents.length === 0 && locations.length === 0 && !isKnownNodeType(type)) return { kind: "none" };
 
 	const parsed = schema.safeParse({
 		map: hasMap ? frontmatter.map : undefined,
@@ -87,8 +100,12 @@ export function parseNode(frontmatter: unknown): NodeParseResult {
 	if (start !== undefined && end !== undefined && start > end) issues.push("start: must not be after end");
 	if (issues.length > 0) return { kind: "invalid", issues };
 
-	const resolvedType = type || (parents.length > 0 ? "character" : DEFAULT_NODE_TYPE);
+	const resolvedType = type || (parents.length > 0 || locations.length > 0 ? "character" : DEFAULT_NODE_TYPE);
 	// x/y without a map are ignored: they are not a location
 	const placed = map !== undefined ? { map, x, y } : {};
-	return { kind: "node", fields: { type: resolvedType, ...placed, icon, start, end, parents } };
+	return {
+		kind: "node",
+		fields: { type: resolvedType, ...placed, icon, start, end, parents, locations, present },
+		warnings,
+	};
 }

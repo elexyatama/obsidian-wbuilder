@@ -1,11 +1,12 @@
-import { MarkdownView, Notice, Plugin, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
+import { MarkdownView, Menu, Notice, Plugin, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import { BUILTIN_STICKERS, defaultStickerFor } from "../../core/stickers";
 import { createMapData, MAP_EXTENSION, serializeMapData } from "../../core/mapFile";
 import { createNavigationBus } from "../../core/navigation";
 import { NodeIndex } from "../../core/nodeIndex";
 import { buildFrontmatter, type NewNodeSpec } from "../../core/nodeTemplate";
 import { Timeline } from "../../core/timeline";
-import { isPin, type Pin } from "../../core/types";
+import { removeLocationRaw, upsertLocationRaw, type MentionMode } from "../../core/tracker";
+import { isPin, type LocationEntry, type NodeRecord, type Pin } from "../../core/types";
 import type { CreateNodeRequest } from "../../render/MapScreen";
 import { DEFAULT_MAP, VIEW_TYPE_FAMILY, VIEW_TYPE_MAP, isImageExtension } from "./constants";
 import { createNodeNote, ensureFolder, pathInFolder } from "./createNote";
@@ -17,6 +18,8 @@ import { DEFAULT_SETTINGS, WBuilderSettingTab, type SettingsOwner, type WBuilder
 import { StickerLibrary } from "./stickerLibrary";
 import { syncIndexWithVault } from "./vaultSync";
 import type { WorldContext } from "./world";
+
+const hasFamily = (node: NodeRecord) => node.type === "character" || node.parents.length > 0;
 
 /**
  * Obsidian host. Everything Obsidian-specific lives under host/obsidian; a standalone
@@ -31,6 +34,7 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 	private stickers!: StickerLibrary;
 	/** Where pins open their notes, so the map tab itself is never navigated away. */
 	private lastNoteLeaf: WorkspaceLeaf | null = null;
+	private trackingTimer = 0;
 
 	override async onload(): Promise<void> {
 		this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData()) };
@@ -45,6 +49,10 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 			requestCreateNode: (request) => this.requestCreateNode(request),
 			createNote: (spec) => this.createNote(spec),
 			showFamilyTree: (path) => void this.showFamilyTree(path),
+			resolveLink: (target, from) => this.app.metadataCache.getFirstLinkpathDest(target, from)?.path ?? null,
+			mentionMode: (): MentionMode => this.settings.mentionMode,
+			setLocation: (path, entry) => this.editLocations(path, (list) => upsertLocationRaw(list, entry)),
+			removeLocation: (path, year) => this.editLocations(path, (list) => removeLocationRaw(list, year)),
 		};
 
 		this.registerView(VIEW_TYPE_MAP, (leaf) => new MapView(leaf, world));
@@ -59,8 +67,7 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 			id: "reveal-active-note",
 			name: "Reveal active note on map",
 			checkCallback: (checking) => {
-				const file = this.app.workspace.getActiveFile();
-				const node = file ? this.index.get(file.path) : undefined;
+				const node = this.activeNode();
 				if (!node || !isPin(node)) return false;
 				if (!checking) void this.revealOnMap(node);
 				return true;
@@ -70,10 +77,19 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 			id: "show-family-tree",
 			name: "Show family tree of active note",
 			checkCallback: (checking) => {
-				const file = this.app.workspace.getActiveFile();
-				const node = file ? this.index.get(file.path) : undefined;
-				if (!node || (node.type !== "character" && node.parents.length === 0)) return false;
+				const node = this.activeNode();
+				if (!node || !hasFamily(node)) return false;
 				if (!checking) void this.showFamilyTree(node.path);
+				return true;
+			},
+		});
+		this.addCommand({
+			id: "track-character",
+			name: "Track active character on map",
+			checkCallback: (checking) => {
+				const node = this.activeNode();
+				if (!node || node.type !== "character") return false;
+				if (!checking) void this.trackOnMap(node.path);
 				return true;
 			},
 		});
@@ -81,12 +97,19 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		syncIndexWithVault(this, this.index);
 		this.watchMapAndStickerFiles();
 
+		// right-click a note (in the file list or the editor) to reach the same actions
+		this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => this.addNoteMenuItems(menu, file instanceof TFile ? file : null)));
+		this.registerEvent(this.app.workspace.on("editor-menu", (menu, _editor, info) => this.addNoteMenuItems(menu, info.file)));
+
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", (leaf) => {
 				if (leaf?.view instanceof MarkdownView) this.lastNoteLeaf = leaf;
 			}),
 		);
+		// links resolving differently (a note created or renamed) can change where events place characters
+		this.registerEvent(this.app.metadataCache.on("resolved", () => this.scheduleTrackingRefresh()));
 		this.register(this.bus.on("open-note", ({ path }) => void this.openNote(path)));
+		this.register(() => window.clearTimeout(this.trackingTimer));
 	}
 
 	async saveSettings(): Promise<void> {
@@ -95,6 +118,47 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 
 	stickerFolderChanged(): void {
 		this.stickers.changed();
+	}
+
+	mentionModeChanged(): void {
+		this.bus.emit("tracking-changed", null);
+	}
+
+	private scheduleTrackingRefresh(): void {
+		window.clearTimeout(this.trackingTimer);
+		this.trackingTimer = window.setTimeout(() => this.bus.emit("tracking-changed", null), 200);
+	}
+
+	/**
+	 * The note the user is working in. While a map tab is active Obsidian reports the map
+	 * file as the active file, so fall back to the last note that was open in an editor.
+	 */
+	private activeNote(): TFile | null {
+		const { workspace } = this.app;
+		const active = workspace.getActiveFile();
+		if (active && active.extension === "md") return active;
+		const leaf = this.lastNoteLeaf;
+		if (leaf && workspace.getLeavesOfType("markdown").includes(leaf)) return (leaf.view as MarkdownView).file;
+		return null;
+	}
+
+	private activeNode(): NodeRecord | undefined {
+		const file = this.activeNote();
+		return file ? this.index.get(file.path) : undefined;
+	}
+
+	private addNoteMenuItems(menu: Menu, file: TFile | null): void {
+		const node = file ? this.index.get(file.path) : undefined;
+		if (!node) return;
+		if (hasFamily(node)) {
+			menu.addItem((item) => item.setTitle("Show family tree").setIcon("network").onClick(() => void this.showFamilyTree(node.path)));
+		}
+		if (node.type === "character") {
+			menu.addItem((item) => item.setTitle("Track on map").setIcon("map-pin").onClick(() => void this.trackOnMap(node.path)));
+		}
+		if (isPin(node)) {
+			menu.addItem((item) => item.setTitle("Reveal on map").setIcon("map").onClick(() => void this.revealOnMap(node)));
+		}
 	}
 
 	private watchMapAndStickerFiles(): void {
@@ -121,10 +185,14 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		this.registerEvent(vault.on("rename", stickerFileChanged));
 	}
 
-	/** Opens the default map, creating a "World" map if the vault has none yet. */
-	private async openMap(): Promise<void> {
+	/** The default map file, creating a "World" map if the vault has none yet. */
+	private async defaultMapFile(): Promise<TFile | null> {
 		await this.maps.refresh();
-		const file = this.maps.first() ?? (await this.createMapFile(DEFAULT_MAP.name, DEFAULT_MAP.id, DEFAULT_MAP.seed, DEFAULT_MAP.width));
+		return this.maps.first() ?? (await this.createMapFile(DEFAULT_MAP.name, DEFAULT_MAP.id, DEFAULT_MAP.seed, DEFAULT_MAP.width));
+	}
+
+	private async openMap(): Promise<void> {
+		const file = await this.defaultMapFile();
 		if (file) await this.openMapFile(file);
 	}
 
@@ -176,12 +244,39 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		if (leaf.view instanceof MapView) leaf.view.focusTile(pin.x, pin.y);
 	}
 
+	/** Opens a map (the character's own if it has one) with this character selected in the tracker. */
+	private async trackOnMap(path: string): Promise<void> {
+		const node = this.index.get(path);
+		await this.maps.refresh();
+		const file = (node?.map ? this.maps.fileFor(node.map) : undefined) ?? (await this.defaultMapFile());
+		if (!file) return;
+		const leaf = await this.openMapFile(file);
+		await leaf.loadIfDeferred();
+		if (leaf.view instanceof MapView) leaf.view.trackCharacter(path);
+	}
+
 	private async showFamilyTree(path: string): Promise<void> {
 		const { workspace } = this.app;
 		let leaf = workspace.getLeavesOfType(VIEW_TYPE_FAMILY)[0];
 		if (!leaf) leaf = workspace.getLeaf("tab");
 		await leaf.setViewState({ type: VIEW_TYPE_FAMILY, active: true, state: { focus: path } });
 		await workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * Rewrites a character's `locations` list with Obsidian's frontmatter API (so the rest of
+	 * the YAML is preserved), then updates the index right away instead of waiting for the
+	 * file watcher.
+	 */
+	private async editLocations(path: string, change: (list: unknown) => unknown[]): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) return;
+		let updated: Record<string, unknown> = {};
+		await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+			frontmatter.locations = change(frontmatter.locations);
+			updated = { ...frontmatter };
+		});
+		this.index.upsert(file.path, updated);
 	}
 
 	private stickerOptions(): StickerOption[] {

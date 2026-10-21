@@ -15,6 +15,7 @@ export class MapView extends TextFileView {
 	/** The file's text as loaded, so a file we could not parse is never overwritten. */
 	private rawData = "";
 	private pendingFocus: { x: number; y: number } | null = null;
+	private pendingTrack: string | null = null;
 	private camera: CameraState | null = null;
 
 	constructor(
@@ -74,6 +75,12 @@ export class MapView extends TextFileView {
 		else this.pendingFocus = { x, y };
 	}
 
+	/** Start following a character through time. */
+	trackCharacter(path: string): void {
+		if (this.screen) this.screen.trackCharacter(path);
+		else this.pendingTrack = path;
+	}
+
 	override async onClose(): Promise<void> {
 		this.screen?.destroy();
 		this.screen = null;
@@ -88,6 +95,10 @@ export class MapView extends TextFileView {
 		if (this.pendingFocus) {
 			this.screen.focusTile(this.pendingFocus.x, this.pendingFocus.y);
 			this.pendingFocus = null;
+		}
+		if (this.pendingTrack) {
+			this.screen.trackCharacter(this.pendingTrack);
+			this.pendingTrack = null;
 		}
 	}
 
@@ -108,6 +119,11 @@ export class MapView extends TextFileView {
 			resolveSticker: world.stickers.resolve,
 			customStickers: () => world.stickers.custom(),
 			onStickersChanged: (fn) => world.stickers.onChanged(fn),
+			resolveLink: world.resolveLink,
+			mentionMode: () => world.mentionMode(),
+			setLocation: (path, entry) => void world.setLocation(path, entry),
+			removeLocation: (path, year) => void world.removeLocation(path, year),
+			onTrackingChanged: (fn) => world.bus.on("tracking-changed", () => fn()),
 		};
 	}
 }

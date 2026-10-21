@@ -1,8 +1,11 @@
 import type { TFile } from "obsidian";
+import type { LinkResolver } from "../../core/family";
 import type { NavigationBus } from "../../core/navigation";
 import type { NewNodeSpec } from "../../core/nodeTemplate";
 import type { NodeIndex } from "../../core/nodeIndex";
 import type { Timeline } from "../../core/timeline";
+import type { MentionMode } from "../../core/tracker";
+import type { LocationEntry } from "../../core/types";
 import type { CreateNodeRequest } from "../../render/MapScreen";
 import type { StickerLibrary } from "./stickerLibrary";
 
@@ -17,4 +20,10 @@ export interface WorldContext {
 	/** Create a note straight away (no dialog). Null if it could not be created. */
 	createNote(spec: NewNodeSpec): Promise<TFile | null>;
 	showFamilyTree(path: string): void;
+	/** Turns link text into a note path, the way Obsidian resolves links. */
+	resolveLink: LinkResolver;
+	mentionMode(): MentionMode;
+	/** Adds or replaces a character's `locations` entry for a year, in their note. */
+	setLocation(path: string, entry: LocationEntry): Promise<void>;
+	removeLocation(path: string, year: number): Promise<void>;
 }
