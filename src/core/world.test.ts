@@ -13,6 +13,7 @@ const person = (name: string, parents: string[] = [], extra: Partial<NodeRecord>
 	name,
 	type: "character",
 	parents,
+	affiliations: [],
 	locations: [],
 	mentions: [],
 	...extra,

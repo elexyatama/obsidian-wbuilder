@@ -10,6 +10,15 @@ export function isActiveAt(period: Period, year: number): boolean {
 	return (period.start === undefined || period.start <= year) && (period.end === undefined || year <= period.end);
 }
 
+/** "300–360", "from 300", "until 360", or "" when it has always existed and lasts indefinitely. */
+export function describePeriod(period: Period): string {
+	const { start, end } = period;
+	if (start !== undefined && end !== undefined) return start === end ? `${start}` : `${start}–${end}`;
+	if (start !== undefined) return `from ${start}`;
+	if (end !== undefined) return `until ${end}`;
+	return "";
+}
+
 export interface YearRange {
 	min: number;
 	max: number;

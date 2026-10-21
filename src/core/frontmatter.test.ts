@@ -13,7 +13,7 @@ describe("parseNode", () => {
 	it("reads a placed node", () => {
 		expect(parseNode({ type: "structure", map: "world", x: 12, y: 34, icon: "castle" })).toEqual({
 			kind: "node",
-			fields: { type: "structure", map: "world", x: 12, y: 34, icon: "castle", parents: [], locations: [], present: [] },
+			fields: { type: "structure", map: "world", x: 12, y: 34, icon: "castle", parents: [], affiliations: [], locations: [], present: [] },
 			warnings: [],
 		});
 	});

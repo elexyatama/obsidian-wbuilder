@@ -39,6 +39,10 @@ export interface NodeRecord {
 	y?: number;
 	/** Sticker id, emoji, or vault path of an image. */
 	icon?: string;
+	/** One or two sentences about the node, shown when hovering it on a map. */
+	overview?: string;
+	/** Links to the affiliation notes this node belongs to, as written, e.g. "[[Order of the Ash]]". */
+	affiliations: string[];
 	/** First year the node exists. Undefined means it has always existed. */
 	start?: number;
 	/** Last year the node exists. Undefined means indefinitely. */

@@ -29,8 +29,106 @@
 	cursor: crosshair;
 }
 
+.wb-canvas.is-label {
+	cursor: text;
+}
+
+.wb-canvas.is-label.is-over-label {
+	cursor: move;
+}
+
 .wb-canvas.is-dragging {
 	cursor: grabbing;
+}
+
+/* ---------- hover card ---------- */
+
+.wb-tip {
+	position: absolute;
+	z-index: 5;
+	max-width: 300px;
+	padding: 8px 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-s);
+	font-size: var(--font-ui-small);
+	pointer-events: none;
+}
+
+.wb-tip-item + .wb-tip-item {
+	padding-top: 8px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.wb-tip-title {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.wb-tip-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	flex: none;
+	align-self: center;
+}
+
+.wb-tip-name {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.wb-tip-type {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.wb-tip-overview {
+	margin-top: 3px;
+	color: var(--text-normal);
+	display: -webkit-box;
+	-webkit-line-clamp: 6;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.wb-tip-meta,
+.wb-tip-more {
+	margin-top: 3px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* ---------- label editor ---------- */
+
+.wb-label-editor {
+	position: absolute;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	width: 260px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-s);
+}
+
+.wb-label-editor input[type="text"] {
+	width: 100%;
+}
+
+.wb-label-editor button {
+	height: auto;
+	padding: 3px 9px;
+	font-size: var(--font-ui-small);
 }
 
 .wb-panels {

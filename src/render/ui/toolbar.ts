@@ -2,12 +2,14 @@ import { BRUSH_MODES, MAX_BRUSH_RADIUS, MIN_BRUSH_RADIUS, type Brush, type Brush
 import { NODE_TYPES } from "../../core/nodeTypes";
 import { h } from "./dom";
 
-export type Tool = "select" | "place" | "brush";
+/** "none" means no tool is switched on: the map only pans and zooms, and clicks do nothing. */
+export type Tool = "none" | "select" | "place" | "brush" | "label";
 
-const TOOLS: readonly { id: Tool; label: string; hint: string }[] = [
-	{ id: "select", label: "Select", hint: "Pan the map and open notes. Right-click to create a note." },
+const TOOLS: readonly { id: Exclude<Tool, "none">; label: string; hint: string }[] = [
+	{ id: "select", label: "Select", hint: "Click a pin to open its note. Click again to switch it off and click freely. Right-click for more." },
 	{ id: "place", label: "Place", hint: "Click the map to create a note there. Pick a sticker to choose its icon." },
 	{ id: "brush", label: "Brush", hint: "Paint water, land and elevation. Shift or middle mouse pans. Ctrl+Z undoes." },
+	{ id: "label", label: "Label", hint: "Type a name straight onto the map: click to add, click a label to edit, drag to move." },
 ];
 
 export interface ToolbarModel {
@@ -20,9 +22,12 @@ export interface ToolbarModel {
 }
 
 export interface ToolbarActions {
-	setTool(tool: Tool): void;
+	/** Clicked a tool button. Clicking the tool that is already on switches it off. */
+	toggleTool(tool: Exclude<Tool, "none">): void;
 	/** Show or hide the characters panel (the tracker). */
 	toggleCharacters(): void;
+	/** Open the map's settings (its size). */
+	openMapSettings(): void;
 	setNodeType(id: string): void;
 	setBrush(patch: Partial<Brush>): void;
 	undo(): void;
@@ -36,6 +41,7 @@ export interface ToolbarActions {
 export class Toolbar {
 	readonly el: HTMLElement;
 	private readonly toolButtons = new Map<Tool, HTMLButtonElement>();
+	private readonly labelRow: HTMLElement;
 	private readonly modeButtons = new Map<BrushMode, HTMLButtonElement>();
 	private readonly placeRow: HTMLElement;
 	private readonly brushRow: HTMLElement;
@@ -56,7 +62,7 @@ export class Toolbar {
 		const toolRow = h("div", { class: "wb-row" });
 		for (const tool of TOOLS) {
 			const button = h("button", { text: tool.label, title: tool.hint });
-			button.addEventListener("click", () => actions.setTool(tool.id));
+			button.addEventListener("click", () => actions.toggleTool(tool.id));
 			this.toolButtons.set(tool.id, button);
 			toolRow.append(button);
 		}
@@ -65,7 +71,12 @@ export class Toolbar {
 			title: "Follow characters through time: pick who to track, see where they are each year",
 		});
 		this.charactersButton.addEventListener("click", () => actions.toggleCharacters());
-		toolRow.append(this.charactersButton);
+		const mapButton = h("button", {
+			text: "Map…",
+			title: "Map settings: change the size of this map",
+		});
+		mapButton.addEventListener("click", () => actions.openMapSettings());
+		toolRow.append(this.charactersButton, mapButton);
 		this.undoButton = h("button", { text: "Undo", title: "Undo the last brush stroke (Ctrl+Z)" });
 		this.redoButton = h("button", { text: "Redo", title: "Redo (Ctrl+Shift+Z)" });
 		this.undoButton.addEventListener("click", () => actions.undo());
@@ -101,12 +112,17 @@ export class Toolbar {
 		this.strengthWrap = h("div", { class: "wb-row" }, [this.strengthLabel, this.strength]);
 		this.brushRow.append(modes, h("div", { class: "wb-row" }, [this.radiusLabel, this.radius]), this.strengthWrap);
 
-		this.el.append(toolRow, this.placeRow, this.brushRow);
+		this.labelRow = h("div", { class: "wb-row" }, [
+			h("span", { class: "wb-hint", text: "Click the map to type a name there. Click a label to edit it, drag to move it." }),
+		]);
+
+		this.el.append(toolRow, this.placeRow, this.brushRow, this.labelRow);
 	}
 
 	update(model: ToolbarModel): void {
 		for (const [tool, button] of this.toolButtons) button.classList.toggle("mod-cta", tool === model.tool);
 		this.charactersButton.classList.toggle("mod-cta", model.charactersOpen);
+		this.labelRow.hidden = model.tool !== "label";
 		this.placeRow.hidden = model.tool !== "place";
 		this.brushRow.hidden = model.tool !== "brush";
 		this.undoButton.hidden = this.redoButton.hidden = model.tool !== "brush";

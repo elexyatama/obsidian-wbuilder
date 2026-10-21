@@ -13,6 +13,7 @@ export const NODE_TYPES: readonly NodeTypeDef[] = [
 	{ id: "character", label: "Character", color: "#c2467a", defaultSticker: "person" },
 	{ id: "creature", label: "Creature", color: "#8348b8", defaultSticker: "dragon" },
 	{ id: "faction", label: "Faction", color: "#2f86ad", defaultSticker: "flag" },
+	{ id: "affiliation", label: "Affiliation", color: "#1f9e89", defaultSticker: "shield" },
 	{ id: "event", label: "Event", color: "#d2562a", defaultSticker: "star" },
 	{ id: "item", label: "Item", color: "#3f9f6c", defaultSticker: "gem" },
 ];

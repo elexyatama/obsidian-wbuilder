@@ -5,8 +5,12 @@ export interface NewNodeSpec {
 	x?: number;
 	y?: number;
 	icon?: string;
+	/** One or two sentences, shown when hovering the node on a map. */
+	overview?: string;
 	start?: number;
 	end?: number;
+	/** Links to affiliation notes, e.g. "[[Order of the Ash]]". */
+	affiliations?: string[];
 	parents?: string[];
 }
 
@@ -37,8 +41,11 @@ export function buildFrontmatter(spec: NewNodeSpec): Record<string, unknown> {
 		fm.y = spec.y;
 	}
 	if (spec.icon) fm.icon = spec.icon;
+	const overview = spec.overview?.replace(/\s+/g, " ").trim();
+	if (overview) fm.overview = overview;
 	if (spec.start !== undefined) fm.start = spec.start;
 	if (spec.end !== undefined) fm.end = spec.end;
+	if (spec.affiliations && spec.affiliations.length > 0) fm.affiliation = spec.affiliations;
 	if (spec.type === "character" || (spec.parents && spec.parents.length > 0)) fm.parents = spec.parents ?? [];
 	return fm;
 }

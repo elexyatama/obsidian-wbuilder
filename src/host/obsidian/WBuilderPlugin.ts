@@ -172,6 +172,7 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 			this.index.issuesFor(file.path),
 			this.index.warningsFor(file.path),
 			(target, from) => this.app.metadataCache.getFirstLinkpathDest(target, from)?.path ?? null,
+			(path) => this.index.get(path)?.type,
 		);
 		if (cannot) {
 			const hint =
@@ -333,7 +334,11 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 	}
 
 	private requestCreateNode(request: CreateNodeRequest): void {
-		new NewNodeModal(this.app, request, this.stickerOptions(), async (result) => {
+		const affiliations = this.index
+			.ofType("affiliation")
+			.map((node) => node.name)
+			.sort((a, b) => a.localeCompare(b));
+		new NewNodeModal(this.app, request, this.stickerOptions(), affiliations, async (result) => {
 			// a sticker equal to the type's default needs no `icon` line
 			const icon = result.icon && result.icon !== defaultStickerFor(result.type).id ? result.icon : undefined;
 			const file = await this.createNote({
@@ -343,6 +348,8 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 				x: request.x,
 				y: request.y,
 				icon,
+				overview: result.overview,
+				affiliations: result.affiliation ? [`[[${result.affiliation}]]`] : undefined,
 				start: result.start,
 				end: result.end,
 			});

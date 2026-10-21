@@ -65,10 +65,17 @@ function splitNames(text: string): string[] {
 	return text.split(/[;,]/).map((part) => part.trim()).filter(Boolean);
 }
 
-function readParents(value: unknown): string[] {
+/** A list of links or names, from a list, a single value, or a comma-separated text property. */
+function readLinks(value: unknown): string[] {
 	const raw = Array.isArray(value) ? value.map(firstString) : [firstString(value)];
 	const names = raw.flatMap((item) => (item === undefined ? [] : splitNames(item)));
 	return [...new Set(names)];
+}
+
+/** The overview as one trimmed line of text; empty or non-text values mean "no overview". */
+function readOverview(value: unknown): string | undefined {
+	const text = typeof value === "number" ? String(value) : typeof value === "string" ? value : "";
+	return text.replace(/\s+/g, " ").trim() || undefined;
 }
 
 /** "300" typed into a text property is still the number 300. Anything else is passed on to be rejected. */
@@ -84,6 +91,8 @@ function asNumber(value: unknown): unknown {
  *   x: 12                   (tile_x also accepted)
  *   y: 34                   (tile_y also accepted)
  *   icon: castle            sticker id, emoji, or path of an image in the vault
+ *   overview: A ruined fort. one or two sentences, shown when hovering the node on a map
+ *   affiliation: ["[[Order of the Ash]]"]   the affiliation notes it belongs to (affiliations also accepted)
  *   start: 120              (born also accepted) omit = has always existed
  *   end: 340                (died also accepted) omit = indefinite
  *   parents: ["[[Alice]]"]  character parents, as links or plain names
@@ -98,9 +107,11 @@ function asNumber(value: unknown): unknown {
 export function parseNode(frontmatter: unknown): NodeParseResult {
 	if (!isRecord(frontmatter)) return { kind: "none" };
 
-	const parents = readParents(frontmatter.parents);
+	const parents = readLinks(frontmatter.parents);
+	const affiliations = [...new Set([...readLinks(frontmatter.affiliation), ...readLinks(frontmatter.affiliations)])];
+	const overview = readOverview(frontmatter.overview);
 	const { entries: locations, warnings } = parseLocations(frontmatter.locations);
-	const present = readParents(frontmatter.present).map(linkTarget).filter(Boolean);
+	const present = readLinks(frontmatter.present).map(linkTarget).filter(Boolean);
 	const type = typeof frontmatter.type === "string" ? frontmatter.type.trim().toLowerCase() : "";
 	const hasMap = frontmatter.map !== undefined && frontmatter.map !== null;
 	if (!hasMap && parents.length === 0 && locations.length === 0 && !isKnownNodeType(type)) return { kind: "none" };
@@ -134,7 +145,7 @@ export function parseNode(frontmatter: unknown): NodeParseResult {
 	const placed = map !== undefined ? { map, x, y } : {};
 	return {
 		kind: "node",
-		fields: { type: resolvedType, ...placed, icon, start, end, parents, locations, present },
+		fields: { type: resolvedType, ...placed, icon, overview, start, end, parents, affiliations, locations, present },
 		warnings,
 	};
 }

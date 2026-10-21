@@ -1,15 +1,20 @@
 import { brushFootprint } from "../core/brush";
 import { Camera, type Vec2 } from "../core/camera";
 import { CHUNK_SIZE, type TileGrid } from "../core/grid";
+import type { MapLabel } from "../core/mapFile";
 import { getNodeType } from "../core/nodeTypes";
 import type { TrackLine } from "../core/tracking";
 import type { Pin } from "../core/types";
 import { ChunkCache } from "./chunkCache";
+import { MIN_LABEL_PX, drawMapLabel, labelFontPx, measureLabel } from "./labelPainter";
 import { drawPin, drawPinLabel, pinRadius } from "./pinPainter";
 import { builtinResolver, type StickerResolver } from "./stickerPainter";
 
-/** "pan": dragging moves the map. "paint": dragging paints (shift or middle mouse still pans). */
-export type RendererMode = "pan" | "paint";
+/**
+ * "pan": dragging moves the map. "paint": dragging paints (shift or middle mouse still pans).
+ * "label": click empty map to add a label, click a label to edit it, drag a label to move it.
+ */
+export type RendererMode = "pan" | "paint" | "label";
 
 export interface PointerInfo {
 	tile: Vec2;
@@ -19,7 +24,10 @@ export interface PointerInfo {
 }
 
 export interface RendererCallbacks {
-	onHover?: (info: { tile: Vec2 | null; pins: Pin[] }) => void;
+	/** `point` is the pointer in canvas pixels, for placing a hover card. */
+	onHover?: (info: { tile: Vec2 | null; pins: Pin[]; point: Vec2 | null }) => void;
+	/** A pan, paint or label drag has started (a hover card should get out of the way). */
+	onDragStart?: () => void;
 	/** A click (not a drag) inside the map while in "pan" mode. */
 	onClick?: (info: PointerInfo) => void;
 	onContextMenu?: (info: PointerInfo) => void;
@@ -27,6 +35,13 @@ export interface RendererCallbacks {
 	onStrokeMove?: (tile: Vec2) => void;
 	onStrokeEnd?: () => void;
 	onDropSticker?: (tile: Vec2, stickerId: string, event: DragEvent) => void;
+	/** Label mode: a click on empty map. `world` is in tile units, `point` in canvas pixels. */
+	onLabelCreate?: (world: Vec2, point: Vec2) => void;
+	/** Label mode: a click on an existing label. */
+	onLabelClick?: (label: MapLabel, point: Vec2) => void;
+	/** Label mode: a label is being dragged to `world`. */
+	onLabelMove?: (id: string, world: Vec2) => void;
+	onLabelMoveEnd?: (id: string) => void;
 }
 
 /** Marks a dragged sticker so the canvas can tell it from other drops. */
@@ -39,7 +54,7 @@ const TAU = Math.PI * 2;
 
 interface Drag {
 	id: number;
-	kind: "pan" | "paint";
+	kind: "pan" | "paint" | "label";
 	button: number;
 	startX: number;
 	startY: number;
@@ -47,6 +62,9 @@ interface Drag {
 	lastY: number;
 	moved: boolean;
 	lastTile: Vec2;
+	/** For "label" drags: which label, and where it is relative to the pointer so it doesn't jump. */
+	label?: MapLabel;
+	grab?: Vec2;
 }
 
 /**
@@ -61,6 +79,7 @@ export class MapRenderer {
 	private readonly chunks: ChunkCache;
 	private readonly disposers: Array<() => void> = [];
 	private pins: Pin[] = [];
+	private labels: readonly MapLabel[] = [];
 	private lines: readonly TrackLine[] = [];
 	private rings: ReadonlyMap<string, string> = new Map();
 	private mode: RendererMode = "pan";
@@ -105,9 +124,16 @@ export class MapRenderer {
 		this.invalidate();
 	}
 
+	/** Text labels written on the map, drawn above the terrain and below the pins. */
+	setLabels(labels: readonly MapLabel[]): void {
+		this.labels = labels;
+		this.invalidate();
+	}
+
 	setMode(mode: RendererMode): void {
 		this.mode = mode;
 		this.canvas.classList.toggle("is-paint", mode === "paint");
+		this.canvas.classList.toggle("is-label", mode === "label");
 		this.invalidate();
 	}
 
@@ -170,7 +196,7 @@ export class MapRenderer {
 		on("pointermove", (e) => this.onPointerMove(e));
 		on("pointerup", (e) => this.onPointerUp(e));
 		on("pointercancel", (e) => this.endDrag(e));
-		on("pointerleave", () => this.setHover(null, []));
+		on("pointerleave", () => this.setHover(null, [], null));
 		on("wheel", (e) => this.onWheel(e), { passive: false });
 		on("contextmenu", (e) => this.onContextMenu(e));
 		on("dragover", (e) => {
@@ -212,17 +238,33 @@ export class MapRenderer {
 		return hits.sort((a, b) => a.d - b.d).map((h) => h.pin);
 	}
 
+	/** The label under a screen point, topmost first, or null. */
+	private labelAt(sx: number, sy: number): MapLabel | null {
+		const { camera, ctx } = this;
+		for (let i = this.labels.length - 1; i >= 0; i--) {
+			const label = this.labels[i];
+			if (!label.text || labelFontPx(label.size, camera.scale) < MIN_LABEL_PX) continue;
+			const c = camera.worldToScreen(label.x, label.y);
+			const { width, height } = measureLabel(ctx, label, camera.scale);
+			if (Math.abs(sx - c.x) <= width / 2 + 4 && Math.abs(sy - c.y) <= height / 2 + 4) return label;
+		}
+		return null;
+	}
+
 	private onPointerDown(e: PointerEvent): void {
 		if (this.drag) return;
-		const wantsPan = e.button === 1 || (e.button === 0 && (this.mode === "pan" || e.shiftKey));
-		const wantsPaint = e.button === 0 && this.mode === "paint" && !e.shiftKey;
+		const plain = e.button === 0 && !e.shiftKey;
+		const wantsPaint = plain && this.mode === "paint";
+		const wantsPan = e.button === 1 || (e.button === 0 && (this.mode !== "paint" || e.shiftKey));
 		if (!wantsPan && !wantsPaint) return;
 		e.preventDefault();
 		const p = this.local(e);
 		const tile = this.camera.screenToTile(p.x, p.y);
+		const label = plain && this.mode === "label" ? this.labelAt(p.x, p.y) : null;
+		const world = this.camera.screenToWorld(p.x, p.y);
 		this.drag = {
 			id: e.pointerId,
-			kind: wantsPaint ? "paint" : "pan",
+			kind: wantsPaint ? "paint" : label ? "label" : "pan",
 			button: e.button,
 			startX: p.x,
 			startY: p.y,
@@ -230,9 +272,12 @@ export class MapRenderer {
 			lastY: p.y,
 			moved: false,
 			lastTile: tile,
+			label: label ?? undefined,
+			grab: label ? { x: label.x - world.x, y: label.y - world.y } : undefined,
 		};
 		this.canvas.setPointerCapture(e.pointerId);
 		this.canvas.classList.add("is-dragging");
+		this.callbacks.onDragStart?.();
 		if (wantsPaint) this.callbacks.onStrokeStart?.(tile);
 	}
 
@@ -240,10 +285,16 @@ export class MapRenderer {
 		const p = this.local(e);
 		const d = this.drag;
 		if (d && d.id === e.pointerId) {
+			if (!d.moved && Math.hypot(p.x - d.startX, p.y - d.startY) > CLICK_SLOP_PX) d.moved = true;
 			if (d.kind === "pan") {
 				this.camera.panByPixels(p.x - d.lastX, p.y - d.lastY);
 				this.camera.clampCenter(this.grid.width, this.grid.height);
 				this.invalidate();
+			} else if (d.kind === "label") {
+				if (d.moved && d.label && d.grab) {
+					const world = this.camera.screenToWorld(p.x, p.y);
+					this.callbacks.onLabelMove?.(d.label.id, { x: world.x + d.grab.x, y: world.y + d.grab.y });
+				}
 			} else {
 				const tile = this.camera.screenToTile(p.x, p.y);
 				if (tile.x !== d.lastTile.x || tile.y !== d.lastTile.y) {
@@ -253,23 +304,36 @@ export class MapRenderer {
 			}
 			d.lastX = p.x;
 			d.lastY = p.y;
-			if (!d.moved && Math.hypot(p.x - d.startX, p.y - d.startY) > CLICK_SLOP_PX) d.moved = true;
 		}
-		this.updateHover(p);
+		if (!this.drag) this.updateHover(p);
 	}
 
 	private onPointerUp(e: PointerEvent): void {
 		const d = this.drag;
 		if (!d || d.id !== e.pointerId) return;
 		this.endDrag(e);
+		const p = this.local(e);
+		// the hover card was hidden for the drag: work out what is under the pointer again
+		this.hover = null;
+		this.hoverPins = [];
+		this.updateHover(p);
+
 		if (d.kind === "paint") {
 			this.callbacks.onStrokeEnd?.();
 			return;
 		}
-		if (d.moved || d.button !== 0 || this.mode !== "pan") return;
-		const p = this.local(e);
+		if (d.kind === "label") {
+			if (!d.label) return;
+			if (d.moved) this.callbacks.onLabelMoveEnd?.(d.label.id);
+			else this.callbacks.onLabelClick?.(d.label, p);
+			return;
+		}
+		if (d.moved || d.button !== 0) return;
 		const tile = this.camera.screenToTile(p.x, p.y);
-		if (this.grid.inBounds(tile.x, tile.y)) {
+		if (!this.grid.inBounds(tile.x, tile.y)) return;
+		if (this.mode === "label") {
+			this.callbacks.onLabelCreate?.(this.camera.screenToWorld(p.x, p.y), p);
+		} else if (this.mode === "pan") {
 			this.callbacks.onClick?.({ tile, pins: this.pinsAt(p.x, p.y), event: e });
 		}
 	}
@@ -286,6 +350,9 @@ export class MapRenderer {
 		const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
 		this.camera.zoomAt(p.x, p.y, Math.exp(-delta * 0.0015));
 		this.camera.clampCenter(this.grid.width, this.grid.height);
+		// zooming moves everything under the pointer, so a hover card has to be placed again
+		this.hover = null;
+		this.hoverPins = [];
 		this.updateHover(p);
 		this.invalidate();
 	}
@@ -314,10 +381,12 @@ export class MapRenderer {
 		const tile = this.camera.screenToTile(p.x, p.y);
 		const inside = this.grid.inBounds(tile.x, tile.y);
 		const pins = inside ? this.pinsAt(p.x, p.y) : [];
-		this.setHover(inside ? tile : null, pins);
+		this.setHover(inside ? tile : null, pins, p);
+		const overLabel = this.mode === "label" && this.labelAt(p.x, p.y) !== null;
+		this.canvas.classList.toggle("is-over-label", overLabel);
 	}
 
-	private setHover(tile: Vec2 | null, pins: Pin[]): void {
+	private setHover(tile: Vec2 | null, pins: Pin[], point: Vec2 | null): void {
 		const same =
 			tile?.x === this.hover?.x &&
 			tile?.y === this.hover?.y &&
@@ -327,7 +396,7 @@ export class MapRenderer {
 		this.hover = tile;
 		this.hoverPins = pins;
 		this.canvas.classList.toggle("is-over-pin", pins.length > 0 && this.mode === "pan");
-		this.callbacks.onHover?.({ tile, pins });
+		this.callbacks.onHover?.({ tile, pins, point });
 		this.invalidate();
 	}
 
@@ -359,7 +428,18 @@ export class MapRenderer {
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		this.drawCursor();
 		this.drawLines();
+		this.drawLabels();
 		this.drawPins(view);
+	}
+
+	private drawLabels(): void {
+		const { ctx, camera, grid } = this;
+		for (const label of this.labels) {
+			// a label whose anchor is outside the map (after shrinking it) is kept in the file but not shown
+			if (!grid.inBounds(Math.floor(label.x), Math.floor(label.y))) continue;
+			const c = camera.worldToScreen(label.x, label.y);
+			drawMapLabel(ctx, label, c.x, c.y, camera.scale);
+		}
 	}
 
 	/** Each leg of a journey: solid once reached, dashed and faint while still ahead, with an arrow for direction. */

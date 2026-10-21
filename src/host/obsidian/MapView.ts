@@ -1,13 +1,15 @@
 import { Menu, Notice, TextFileView, type WorkspaceLeaf } from "obsidian";
 import { TileGrid } from "../../core/grid";
-import { MAP_EXTENSION, parseMapData, serializeMapData, type MapData } from "../../core/mapFile";
+import { MAP_EXTENSION, parseMapData, resizeMapData, serializeMapData, type MapData } from "../../core/mapFile";
 import { MapScreen, type CameraState, type MapScreenHost } from "../../render/MapScreen";
 import { VIEW_TYPE_MAP } from "./constants";
+import { MapSettingsModal } from "./modals";
 import type { WorldContext } from "./world";
 
 /**
- * A `.worldmap` file opened as a map. The file holds the seed and painted terrain; the
- * pins come from the notes themselves. Saving is debounced by TextFileView.requestSave.
+ * A `.worldmap` file opened as a map. The file holds the seed, the painted terrain and the
+ * labels; the pins come from the notes themselves. Saving is debounced by
+ * TextFileView.requestSave.
  */
 export class MapView extends TextFileView {
 	private screen: MapScreen | null = null;
@@ -44,7 +46,12 @@ export class MapView extends TextFileView {
 
 	getViewData(): string {
 		if (!this.mapData) return this.rawData;
-		return serializeMapData({ ...this.mapData, edits: this.screen ? this.screen.exportEdits() : this.mapData.edits });
+		const { screen } = this;
+		return serializeMapData({
+			...this.mapData,
+			edits: screen ? screen.exportEdits() : this.mapData.edits,
+			labels: screen ? screen.exportLabels() : this.mapData.labels,
+		});
 	}
 
 	setViewData(data: string, _clear: boolean): void {
@@ -90,7 +97,7 @@ export class MapView extends TextFileView {
 		if (this.screen) this.camera = this.screen.getCamera();
 		this.screen?.destroy();
 		const grid = TileGrid.generate(data, data.edits);
-		this.screen = new MapScreen(this.contentEl, this.screenHost(), data, grid);
+		this.screen = new MapScreen(this.contentEl, this.screenHost(), data, grid, data.labels);
 		if (this.camera) this.screen.setCamera(this.camera);
 		if (this.pendingFocus) {
 			this.screen.focusTile(this.pendingFocus.x, this.pendingFocus.y);
@@ -100,6 +107,45 @@ export class MapView extends TextFileView {
 			this.screen.trackCharacter(this.pendingTrack);
 			this.pendingTrack = null;
 		}
+	}
+
+	/** Opens the dialog for this map's size. */
+	private openMapSettings(): void {
+		const data = this.mapData;
+		if (!data) return;
+		new MapSettingsModal(
+			this.app,
+			{
+				id: data.id,
+				seed: data.seed,
+				width: data.width,
+				height: data.height,
+				outside: (width, height) => this.world.index.inMap(data.id).filter((pin) => pin.x >= width || pin.y >= height).length,
+			},
+			({ width, height }) => this.resizeMap(width, height),
+		).open();
+	}
+
+	/**
+	 * Applies a new size and rebuilds the map. The current painted terrain and labels are read
+	 * back first so nothing unsaved is lost, and the camera stays where it was.
+	 */
+	private resizeMap(width: number, height: number): void {
+		if (!this.mapData) return;
+		const current: MapData = {
+			...this.mapData,
+			edits: this.screen?.exportEdits() ?? this.mapData.edits,
+			labels: this.screen?.exportLabels() ?? this.mapData.labels,
+		};
+		try {
+			this.mapData = resizeMapData(current, width, height);
+		} catch (error) {
+			new Notice(`WBuilder: ${error instanceof Error ? error.message : String(error)}`);
+			return;
+		}
+		this.mountScreen(this.mapData);
+		this.requestSave();
+		new Notice(`Map resized to ${width} × ${height} tiles.`);
 	}
 
 	private screenHost(): MapScreenHost {
@@ -115,7 +161,8 @@ export class MapView extends TextFileView {
 				for (const entry of entries) menu.addItem((item) => item.setTitle(entry.title).onClick(entry.onClick));
 				menu.showAtMouseEvent(event);
 			},
-			terrainChanged: () => this.requestSave(),
+			mapChanged: () => this.requestSave(),
+			openMapSettings: () => this.openMapSettings(),
 			resolveSticker: world.stickers.resolve,
 			customStickers: () => world.stickers.custom(),
 			onStickersChanged: (fn) => world.stickers.onChanged(fn),

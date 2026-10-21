@@ -21,9 +21,11 @@ const sameNode = (a: NodeRecord, b: NodeRecord) =>
 	a.x === b.x &&
 	a.y === b.y &&
 	a.icon === b.icon &&
+	a.overview === b.overview &&
 	a.start === b.start &&
 	a.end === b.end &&
 	sameList(a.parents, b.parents, (p, q) => p === q) &&
+	sameList(a.affiliations, b.affiliations, (p, q) => p === q) &&
 	sameList(a.locations, b.locations, (p, q) => JSON.stringify(p) === JSON.stringify(q)) &&
 	sameList(a.mentions, b.mentions, (p, q) => p.target === q.target && p.mark === q.mark);
 
