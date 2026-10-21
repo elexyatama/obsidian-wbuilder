@@ -43,8 +43,10 @@ export function buildFrontmatter(spec: NewNodeSpec): Record<string, unknown> {
 	if (spec.icon) fm.icon = spec.icon;
 	const overview = spec.overview?.replace(/\s+/g, " ").trim();
 	if (overview) fm.overview = overview;
-	if (spec.start !== undefined) fm.start = spec.start;
-	if (spec.end !== undefined) fm.end = spec.end;
+	// a character's years read better as born/died; both spellings mean the same thing when read back
+	const [startKey, endKey] = spec.type === "character" ? ["born", "died"] : ["start", "end"];
+	if (spec.start !== undefined) fm[startKey] = spec.start;
+	if (spec.end !== undefined) fm[endKey] = spec.end;
 	if (spec.affiliations && spec.affiliations.length > 0) fm.affiliation = spec.affiliations;
 	if (spec.type === "character" || (spec.parents && spec.parents.length > 0)) fm.parents = spec.parents ?? [];
 	return fm;

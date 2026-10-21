@@ -28,6 +28,8 @@ export interface ToolbarActions {
 	toggleCharacters(): void;
 	/** Open the map's settings (its size). */
 	openMapSettings(): void;
+	/** Create a new character note (not placed on the map). */
+	newCharacter(): void;
 	setNodeType(id: string): void;
 	setBrush(patch: Partial<Brush>): void;
 	undo(): void;
@@ -76,7 +78,12 @@ export class Toolbar {
 			title: "Map settings: change the size of this map",
 		});
 		mapButton.addEventListener("click", () => actions.openMapSettings());
-		toolRow.append(this.charactersButton, mapButton);
+		const newCharacter = h("button", {
+			text: "+ Character",
+			title: "Create a new character. It is not placed on the map; place it with the tracker or the Place tool.",
+		});
+		newCharacter.addEventListener("click", () => actions.newCharacter());
+		toolRow.append(this.charactersButton, newCharacter, mapButton);
 		this.undoButton = h("button", { text: "Undo", title: "Undo the last brush stroke (Ctrl+Z)" });
 		this.redoButton = h("button", { text: "Redo", title: "Redo (Ctrl+Shift+Z)" });
 		this.undoButton.addEventListener("click", () => actions.undo());

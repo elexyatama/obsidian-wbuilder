@@ -1,9 +1,15 @@
 import { PluginSettingTab, Setting, type App, type Plugin } from "obsidian";
+import { DEFAULT_TYPE_FOLDERS } from "../../core/folders";
+import { NODE_TYPES } from "../../core/nodeTypes";
 import type { MentionMode } from "../../core/tracker";
 
 export interface WBuilderSettings {
 	/** Folder new notes and maps are created in. */
 	noteFolder: string;
+	/** Put each type of new note in its own folder under the notes folder (Characters, Events, ...). */
+	sortByType: boolean;
+	/** Folder names the user changed, by node type. Types missing here use the defaults. */
+	typeFolders: Record<string, string>;
 	/** Folder whose images become custom stickers. */
 	stickerFolder: string;
 	/** Whether plain links to characters in an event place them at the event. */
@@ -12,6 +18,8 @@ export interface WBuilderSettings {
 
 export const DEFAULT_SETTINGS: WBuilderSettings = {
 	noteFolder: "World",
+	sortByType: true,
+	typeFolders: {},
 	stickerFolder: "Stickers",
 	mentionMode: "auto",
 };
@@ -49,6 +57,40 @@ export class WBuilderSettingTab extends PluginSettingTab {
 						await owner.saveSettings();
 					}),
 			);
+
+		new Setting(containerEl)
+			.setName("A folder for each type")
+			.setDesc(
+				"New notes go into a folder named for their type inside the notes folder, such as World/Characters and World/Events. " +
+					"Turn off to put every new note straight in the notes folder. Notes that already exist are never moved.",
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(owner.settings.sortByType).onChange(async (value) => {
+					owner.settings.sortByType = value;
+					await owner.saveSettings();
+					this.display();
+				}),
+			);
+
+		if (owner.settings.sortByType) {
+			for (const type of NODE_TYPES) {
+				new Setting(containerEl)
+					.setName(`${type.label} folder`)
+					.setDesc(type.id === NODE_TYPES[0].id ? 'Leave empty for the default shown, or type "." to use the notes folder itself.' : "")
+					.addText((text) =>
+						text
+							.setPlaceholder(DEFAULT_TYPE_FOLDERS[type.id] ?? "")
+							.setValue(owner.settings.typeFolders[type.id] ?? "")
+							.onChange(async (value) => {
+								const folders = { ...owner.settings.typeFolders };
+								if (value.trim()) folders[type.id] = value.trim();
+								else delete folders[type.id];
+								owner.settings.typeFolders = folders;
+								await owner.saveSettings();
+							}),
+					);
+			}
+		}
 
 		new Setting(containerEl)
 			.setName("Sticker folder")

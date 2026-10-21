@@ -29,11 +29,14 @@ export interface MenuEntry {
 
 export interface CreateNodeRequest {
 	map: string;
-	x: number;
-	y: number;
+	/** The tile to place the note on. Leave out both for a note that is not placed on the map (a new character). */
+	x?: number;
+	y?: number;
 	type: string;
 	/** Sticker id the user picked; undefined means "the type's default". */
 	icon?: string;
+	/** The type is fixed (it came from a "New character" button), so the dialog doesn't offer a choice. */
+	lockType?: boolean;
 }
 
 /** What a map screen needs from the app it runs in. Implemented by each host. */
@@ -141,6 +144,11 @@ export class MapScreen {
 			toggleTool: (tool) => this.setTool(this.tool === tool ? "none" : tool),
 			toggleCharacters: () => this.setCharactersOpen(!this.charactersOpen),
 			openMapSettings: () => host.openMapSettings(),
+			newCharacter: () => {
+				// open the list first, so the new character is visible in it as soon as it exists
+				this.setCharactersOpen(true);
+				host.createNode({ map: map.id, type: "character", lockType: true });
+			},
 			setNodeType: (id) => {
 				this.nodeType = id;
 				this.refreshToolbar();

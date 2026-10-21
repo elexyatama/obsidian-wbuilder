@@ -1,5 +1,6 @@
 import { MarkdownView, Menu, Notice, Plugin, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import { describeNote } from "../../core/describe";
+import { folderForType } from "../../core/folders";
 import { BUILTIN_STICKERS, defaultStickerFor } from "../../core/stickers";
 import { createMapData, MAP_EXTENSION, serializeMapData } from "../../core/mapFile";
 import { createNavigationBus } from "../../core/navigation";
@@ -338,15 +339,15 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 			.ofType("affiliation")
 			.map((node) => node.name)
 			.sort((a, b) => a.localeCompare(b));
-		new NewNodeModal(this.app, request, this.stickerOptions(), affiliations, async (result) => {
+		// a request with no tile (the "+ Character" button) makes a note that isn't placed on the map
+		const placed = request.x !== undefined && request.y !== undefined;
+		new NewNodeModal(this.app, request, this.stickerOptions(), affiliations, (type) => this.folderFor(type), async (result) => {
 			// a sticker equal to the type's default needs no `icon` line
 			const icon = result.icon && result.icon !== defaultStickerFor(result.type).id ? result.icon : undefined;
 			const file = await this.createNote({
 				name: result.name,
 				type: result.type,
-				map: request.map,
-				x: request.x,
-				y: request.y,
+				...(placed ? { map: request.map, x: request.x, y: request.y } : {}),
 				icon,
 				overview: result.overview,
 				affiliations: result.affiliation ? [`[[${result.affiliation}]]`] : undefined,
@@ -357,9 +358,15 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		}).open();
 	}
 
+	/** The folder a new note of this type is created in (its own folder under the notes folder, unless turned off). */
+	private folderFor(type: string): string {
+		const { noteFolder, sortByType, typeFolders } = this.settings;
+		return folderForType(type, { base: noteFolder, sortByType, typeFolders });
+	}
+
 	/** Creates the note and puts it in the index straight away, so its pin appears without waiting for Obsidian to re-read it. */
 	private async createNote(spec: NewNodeSpec): Promise<TFile | null> {
-		const file = await createNodeNote(this.app, this.settings.noteFolder, spec);
+		const file = await createNodeNote(this.app, this.folderFor(spec.type), spec);
 		if (file) this.index.upsert(file.path, buildFrontmatter(spec));
 		return file;
 	}

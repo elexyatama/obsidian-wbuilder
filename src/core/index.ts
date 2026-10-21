@@ -4,6 +4,7 @@ export * from "./camera";
 export * from "./describe";
 export * from "./emitter";
 export * from "./family";
+export * from "./folders";
 export * from "./frontmatter";
 export * from "./grid";
 export * from "./heightmap";

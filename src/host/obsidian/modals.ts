@@ -31,7 +31,27 @@ function parseYear(text: string, label: string): number | undefined | "invalid" 
 	return year;
 }
 
-/** Asks for a name, type, sticker, overview, affiliation and (optional) period for a note about to be placed on the map. */
+/** The wording for a node's years: a character is born and dies, anything else starts and ends. */
+function yearWords(type: string): { start: string; end: string; startDesc: string; endDesc: string } {
+	return type === "character"
+		? {
+				start: "Born year",
+				end: "Died year",
+				startDesc: "Leave empty if unknown or they have always been around.",
+				endDesc: "Leave empty if they are still alive, or unknown.",
+			}
+		: {
+				start: "Start year",
+				end: "End year",
+				startDesc: "When it begins to exist. Leave empty if it has always existed.",
+				endDesc: "The last year it exists. Leave empty if it lasts indefinitely.",
+			};
+}
+
+/**
+ * Asks for a name, type, sticker, overview, affiliation and (optional) period for a new note.
+ * Opened for a tile on the map, or (with no tile) for a note that is not placed, like a character.
+ */
 export class NewNodeModal extends Modal {
 	private name = "";
 	private type: string;
@@ -40,19 +60,24 @@ export class NewNodeModal extends Modal {
 	private affiliation = "";
 	private start = "";
 	private end = "";
+	private readonly typeLocked: boolean;
 
 	constructor(
 		app: App,
-		init: { type: string; icon?: string; x: number; y: number },
+		init: { type: string; icon?: string; x?: number; y?: number; lockType?: boolean },
 		private readonly stickers: readonly StickerOption[],
 		/** Names of the existing affiliation notes. */
 		private readonly affiliations: readonly string[],
+		/** The folder a new note of a type is saved in, so the dialog can say where it will go. */
+		private readonly destination: (type: string) => string,
 		private readonly onSubmit: (result: NewNodeResult) => void,
 	) {
 		super(app);
 		this.type = init.type;
 		this.icon = init.icon ?? "";
-		this.setTitle(`New note at ${init.x}, ${init.y}`);
+		this.typeLocked = init.lockType === true;
+		const placed = init.x !== undefined && init.y !== undefined;
+		this.setTitle(placed ? `New note at ${init.x}, ${init.y}` : `New ${getNodeType(init.type).label.toLowerCase()}`);
 	}
 
 	override onOpen(): void {
@@ -60,18 +85,40 @@ export class NewNodeModal extends Modal {
 		contentEl.empty();
 
 		new Setting(contentEl).setName("Name").addText((text) => {
-			text.setPlaceholder("Dragon Keep").onChange((value) => (this.name = value));
+			text.setPlaceholder(this.type === "character" ? "Alaric" : "Dragon Keep").onChange((value) => (this.name = value));
 			text.inputEl.addEventListener("keydown", (e) => {
 				if (e.key === "Enter") this.submit();
 			});
 			window.setTimeout(() => text.inputEl.focus(), 0);
 		});
 
-		new Setting(contentEl).setName("Type").addDropdown((dropdown) => {
-			for (const type of NODE_TYPES) dropdown.addOption(type.id, type.label);
-			if (!NODE_TYPES.some((t) => t.id === this.type)) dropdown.addOption(this.type, getNodeType(this.type).label);
-			dropdown.setValue(this.type).onChange((value) => (this.type = value));
-		});
+		// the labels for the two year fields depend on the type, so they are updated when it changes
+		let startSetting: Setting | null = null;
+		let endSetting: Setting | null = null;
+		const showYearWords = () => {
+			const words = yearWords(this.type);
+			startSetting?.setName(words.start).setDesc(words.startDesc);
+			endSetting?.setName(words.end).setDesc(words.endDesc);
+		};
+
+		const typeSetting = new Setting(contentEl).setName("Type");
+		const showDestination = () => {
+			const where = `Saved in ${this.destination(this.type) || "the vault's top folder"}`;
+			typeSetting.setDesc(this.typeLocked ? `${getNodeType(this.type).label}. ${where}` : where);
+		};
+		// a "New character" button fixes the type, so there is nothing to choose
+		if (!this.typeLocked) {
+			typeSetting.addDropdown((dropdown) => {
+				for (const type of NODE_TYPES) dropdown.addOption(type.id, type.label);
+				if (!NODE_TYPES.some((t) => t.id === this.type)) dropdown.addOption(this.type, getNodeType(this.type).label);
+				dropdown.setValue(this.type).onChange((value) => {
+					this.type = value;
+					showDestination();
+					showYearWords();
+				});
+			});
+		}
+		showDestination();
 
 		new Setting(contentEl).setName("Sticker").addDropdown((dropdown) => {
 			dropdown.addOption("", "Default for type");
@@ -97,14 +144,9 @@ export class NewNodeModal extends Modal {
 				dropdown.setValue("").onChange((value) => (this.affiliation = value));
 			});
 
-		new Setting(contentEl)
-			.setName("Start year")
-			.setDesc("When it begins to exist. Leave empty if it has always existed.")
-			.addText((text) => text.setPlaceholder("indefinite").onChange((value) => (this.start = value)));
-		new Setting(contentEl)
-			.setName("End year")
-			.setDesc("The last year it exists. Leave empty if it lasts indefinitely.")
-			.addText((text) => text.setPlaceholder("indefinite").onChange((value) => (this.end = value)));
+		startSetting = new Setting(contentEl).addText((text) => text.setPlaceholder("indefinite").onChange((value) => (this.start = value)));
+		endSetting = new Setting(contentEl).addText((text) => text.setPlaceholder("indefinite").onChange((value) => (this.end = value)));
+		showYearWords();
 
 		new Setting(contentEl)
 			.addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
@@ -120,11 +162,12 @@ export class NewNodeModal extends Modal {
 			new Notice("Give the note a name.");
 			return;
 		}
-		const start = parseYear(this.start, "Start year");
-		const end = parseYear(this.end, "End year");
+		const words = yearWords(this.type);
+		const start = parseYear(this.start, words.start);
+		const end = parseYear(this.end, words.end);
 		if (start === "invalid" || end === "invalid") return;
 		if (start !== undefined && end !== undefined && start > end) {
-			new Notice("The start year can't be after the end year.");
+			new Notice(`The ${words.start.toLowerCase()} can't be after the ${words.end.toLowerCase()}.`);
 			return;
 		}
 		this.close();

@@ -58,6 +58,16 @@ describe("overview", () => {
 		expect(fieldsOf({ type: "structure", overview: "A fort, on the plains: very old." }).overview).toBe("A fort, on the plains: very old.");
 	});
 
+	it("writes a character's years as born/died, which read back as the same period", () => {
+		const text = buildNoteText({ name: "Alaric", type: "character", start: 300, end: 360 });
+		expect(text).toContain("born: 300\ndied: 360");
+		expect(text).not.toContain("start:");
+		const read = fieldsOf({ type: "character", born: 300, died: 360 });
+		expect([read.start, read.end]).toEqual([300, 360]);
+		// everything else keeps start/end
+		expect(buildNoteText({ name: "Keep", type: "structure", start: 100, end: 340 })).toContain("start: 100\nend: 340");
+	});
+
 	it("describes periods for the hover card", () => {
 		expect(describePeriod({ start: 300, end: 360 })).toBe("300–360");
 		expect(describePeriod({ start: 330, end: 330 })).toBe("330");
