@@ -12,7 +12,7 @@ describe("NodeIndex", () => {
 		index.upsert("World/a.md", placed(1, 2));
 		expect(index.get("World/a.md")).toMatchObject({ path: "World/a.md", name: "a", type: "place", map: "world", x: 1, y: 2 });
 		expect(fn).toHaveBeenCalledTimes(1);
-		expect(fn.mock.calls[0][0].added).toHaveLength(1);
+		expect(fn).toHaveBeenCalledWith(expect.objectContaining({ added: [expect.objectContaining({ path: "World/a.md" })] }));
 	});
 
 	it("does not emit when nothing changed (no write/watch feedback loop)", () => {

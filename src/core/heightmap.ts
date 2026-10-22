@@ -55,7 +55,7 @@ export function createHeightSampler(seed: string): (x: number, y: number) => num
 
 /** The height function for a map definition. Throws for generator versions this build doesn't know. */
 export function samplerFor(def: MapDefinition): (x: number, y: number) => number {
-	if (def.generator !== "v1") throw new Error(`Unknown terrain generator: ${def.generator}`);
+	if (def.generator !== "v1") throw new Error(`Unknown terrain generator: ${String(def.generator)}`);
 	return createHeightSampler(def.seed);
 }
 

@@ -2,6 +2,21 @@
 
 An Obsidian plugin for worldbuilders: Markdown notes tied to an interactive, editable tile map, with a timeline and family trees.
 
+Requires Obsidian 1.7.2 or later on desktop (Windows, macOS or Linux). Mobile is not supported yet.
+
+## Install
+
+In Obsidian, open **Settings → Community plugins → Browse**, search for **WBuilder**, then **Install** and **Enable**.
+
+To install by hand, download `main.js`, `manifest.json` and `styles.css` from the latest [release](https://github.com/elexyatama/obsidian-wbuilder/releases) into `<your vault>/.obsidian/plugins/wbuilder/`, then enable the plugin under **Settings → Community plugins**.
+
+## Privacy and disclosures
+
+- **No network use.** WBuilder never makes a network request.
+- **No telemetry, ads, accounts or payments.** Nothing is collected or sent anywhere, nothing is advertised, and nothing is paid or needs signing in.
+- **Open source.** MIT licensed. `main.js` is built from this repository with esbuild (minified, not obfuscated). The only runtime dependencies are `simplex-noise` and `zod`.
+- **Files.** It reads and writes only inside your vault: it creates notes and `.worldmap` map files, edits the frontmatter of a note only when you use the tracker's right-click actions on it, and reads the images in your sticker folder. It never touches files outside the vault.
+
 ## What it does
 
 - **Map.** A procedural tile map (deep ocean, shallows, land, mountains) from a seed, stored as a `.worldmap` file.
@@ -65,7 +80,7 @@ Which mentions count, in the event's text:
 
 A `present: ["[[Alaric]]"]` list in the event's frontmatter counts like `@`. Links inside code, embeds (`![[...]]`) and frontmatter are ignored. A `locations` line the plugin can't read shows a warning (⚠) next to the character in the panel.
 
-Commands: **Open map**, **Create new map**, **Reveal active note on map**, **Show family tree of active note**, **Track active character on map**, **Show how WBuilder reads the active note**. These also work while the map tab is focused (they use the last note you had open). The family tree and track commands are offered for any note; if it isn't a character they say what to add. **Show how WBuilder reads the active note** lists the type, position, years, how each parent link resolved, and any problem with the properties. Numbers typed into text properties (`born: "300"`) are accepted, and several parents may share one value (`parents: "[[Alaric]], [[Beatrix]]"` or `Alaric, Beatrix`). Settings: notes folder (default `World`), a folder per type (on by default, with an editable folder name for each type; `.` means the notes folder itself), sticker folder (default `Stickers`), and how event mentions place characters.
+Commands: **Open map**, **Create new map**, **Reveal active note on map**, **Show family tree of active note**, **Track active character on map**, **Show how the active note is read**. These also work while the map tab is focused (they use the last note you had open). The family tree and track commands are offered for any note; if it isn't a character they say what to add. **Show how the active note is read** lists the type, position, years, how each parent link resolved, and any problem with the properties. Numbers typed into text properties (`born: "300"`) are accepted, and several parents may share one value (`parents: "[[Alaric]], [[Beatrix]]"` or `Alaric, Beatrix`). Settings: notes folder (default `World`), a folder per type (on by default, with an editable folder name for each type; `.` means the notes folder itself), sticker folder (default `Stickers`), and how event mentions place characters.
 
 ## Layout
 
@@ -99,12 +114,10 @@ npm run build             # typecheck + production bundle
 
 **Dependencies live outside OneDrive.** `node_modules` here is a junction to `%USERPROFILE%\dev\wbuilder\node_modules`. Plain `npm install` replaces the junction with a real folder, so always use `npm run deps -- <npm args>` (for example `npm run deps -- install some-package`). `npm run deps` alone repairs the junction.
 
-**Try it in Obsidian.** A test vault with sample notes is at `C:\Users\elexy\dev\wbuilder-vault`, with this folder linked in as its `wbuilder` plugin. Open it as a vault, turn off Restricted mode, enable WBuilder, and read `Welcome.md`. If Obsidian doesn't list the plugin (it may not follow the junction), copy `main.js`, `manifest.json` and `styles.css` into the vault's `.obsidian/plugins/wbuilder/`.
+**Try it in Obsidian.** Make a vault to test in, then link or copy this folder's `main.js`, `manifest.json` and `styles.css` into its `.obsidian/plugins/wbuilder/` (after `npm run build`, or with `npm run dev` running and the Hot Reload plugin). Turn off Restricted mode and enable WBuilder.
 
 ## Status
 
-Unit tests (core), the canvas/UI code (checked in a browser) and the plugin wiring (checked against a stubbed Obsidian API) all pass. **Not yet run inside real Obsidian**, so expect small surprises in the Obsidian-specific parts (file view registration, menus, dialogs).
+Unit tests cover the core, the canvas/UI code is checked in a browser, and the plugin runs in Obsidian 1.14 on Windows. It has not been tried on macOS or Linux.
 
 Known gaps: dragging a pin to move it (edit `x`/`y` for now), `wmap:` coordinate links inside note text, pinch zoom for mobile (`isDesktopOnly` stays `true`), terrain that changes over time, and spouses with no children don't appear in family trees. Characters are a step function between entries (no travel time between two places), and the set of tracked characters resets when you close the map. Labels have no undo (delete them from their editor), a map can only be resized from its top-left corner (right and bottom edges move), and there is no way yet to filter the map by affiliation.
-
-Before publishing: set `author` in `manifest.json`.

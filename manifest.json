@@ -2,8 +2,9 @@
 	"id": "wbuilder",
 	"name": "WBuilder",
 	"version": "0.1.0",
-	"minAppVersion": "1.5.0",
+	"minAppVersion": "1.7.2",
 	"description": "Link Markdown notes to an interactive procedural tile map.",
-	"author": "TODO: your name",
+	"author": "elexyatama",
+	"authorUrl": "https://github.com/elexyatama",
 	"isDesktopOnly": true
 }

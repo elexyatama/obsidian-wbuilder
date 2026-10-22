@@ -85,7 +85,7 @@ export class FamilyTreeRenderer {
 			this.drag = null;
 			// the click event fires right after pointerup, so remember the drag until then
 			this.justDragged = d.moved;
-			setTimeout(() => (this.justDragged = false), 0);
+			window.setTimeout(() => (this.justDragged = false), 0);
 		};
 		on("pointerup", end);
 		on("pointercancel", end);

@@ -345,14 +345,14 @@ export class MapScreen {
 
 	/** The index or the tracker's inputs changed: rebuild the tracks, then the pins. */
 	private refreshAll(): void {
-		const { index, resolveLink, mentionMode } = this.host;
+		const { index, resolveLink } = this.host;
 		for (const path of this.tracked) {
 			if (!index.get(path)) {
 				this.tracked.delete(path);
 				this.colors.delete(path);
 			}
 		}
-		this.tracks = buildTracks(index.all(), resolveLink, mentionMode());
+		this.tracks = buildTracks(index.all(), resolveLink, this.host.mentionMode());
 		this.refreshPins();
 	}
 

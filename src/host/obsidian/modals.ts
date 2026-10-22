@@ -144,8 +144,8 @@ export class NewNodeModal extends Modal {
 				dropdown.setValue("").onChange((value) => (this.affiliation = value));
 			});
 
-		startSetting = new Setting(contentEl).addText((text) => text.setPlaceholder("indefinite").onChange((value) => (this.start = value)));
-		endSetting = new Setting(contentEl).addText((text) => text.setPlaceholder("indefinite").onChange((value) => (this.end = value)));
+		startSetting = new Setting(contentEl).addText((text) => text.setPlaceholder("Indefinite").onChange((value) => (this.start = value)));
+		endSetting = new Setting(contentEl).addText((text) => text.setPlaceholder("Indefinite").onChange((value) => (this.end = value)));
 		showYearWords();
 
 		new Setting(contentEl)
@@ -276,7 +276,7 @@ export class MapSettingsModal extends Modal {
 		const { contentEl, init } = this;
 		contentEl.empty();
 
-		new Setting(contentEl).setName("Map id").setDesc(`${init.id}. Notes join this map with map: ${init.id}.`);
+		new Setting(contentEl).setName("Map ID").setDesc(`${init.id}. Notes join this map with map: ${init.id}.`);
 		new Setting(contentEl).setName("Seed").setDesc(`${init.seed}. The same seed always generates the same terrain, so it is fixed.`);
 		new Setting(contentEl)
 			.setName("Width")

@@ -1,4 +1,4 @@
-import { TFile, type App } from "obsidian";
+import { TFile, normalizePath, type App } from "obsidian";
 import { Emitter, type Unsubscribe } from "../../core/emitter";
 import { findSticker, looksLikeEmoji } from "../../core/stickers";
 import { resolveBuiltin, type ResolvedSticker, type StickerResolver } from "../../render/stickerPainter";
@@ -21,7 +21,7 @@ export class StickerLibrary {
 	/** Images in the sticker folder, for the palette. */
 	custom(): CustomSticker[] {
 		const folder = this.folder();
-		const prefix = folder ? `${folder.replace(/\/+$/, "")}/` : "";
+		const prefix = folder ? `${normalizePath(folder)}/` : "";
 		return this.app.vault
 			.getFiles()
 			.filter((f) => isImageExtension(f.extension) && f.path.startsWith(prefix))
@@ -49,10 +49,10 @@ export class StickerLibrary {
 	}
 
 	private lookup(icon: string): TFile | null {
-		const direct = this.app.vault.getAbstractFileByPath(icon);
+		const direct = this.app.vault.getAbstractFileByPath(normalizePath(icon));
 		if (direct instanceof TFile && isImageExtension(direct.extension)) return direct;
 		const folder = this.folder();
-		const inFolder = this.app.vault.getAbstractFileByPath(folder ? `${folder}/${icon}` : icon);
+		const inFolder = this.app.vault.getAbstractFileByPath(normalizePath(folder ? `${folder}/${icon}` : icon));
 		return inFolder instanceof TFile && isImageExtension(inFolder.extension) ? inFolder : null;
 	}
 

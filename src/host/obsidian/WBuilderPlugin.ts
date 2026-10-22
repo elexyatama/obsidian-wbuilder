@@ -8,14 +8,14 @@ import { NodeIndex } from "../../core/nodeIndex";
 import { buildFrontmatter, type NewNodeSpec } from "../../core/nodeTemplate";
 import { Timeline } from "../../core/timeline";
 import { removeLocationRaw, upsertLocationRaw, type MentionMode } from "../../core/tracker";
-import { isPin, type LocationEntry, type NodeRecord, type Pin } from "../../core/types";
+import { isPin, type NodeRecord, type Pin } from "../../core/types";
 import type { CreateNodeRequest } from "../../render/MapScreen";
 import { DEFAULT_MAP, VIEW_TYPE_FAMILY, VIEW_TYPE_MAP, isImageExtension } from "./constants";
 import { createNodeNote, ensureFolder, pathInFolder } from "./createNote";
 import { FamilyTreeView } from "./FamilyTreeView";
 import { MapRegistry } from "./mapRegistry";
 import { MapView } from "./MapView";
-import { NewMapModal, NewNodeModal, type StickerOption } from "./modals";
+import { NewMapModal, NewNodeModal, type NewNodeResult, type StickerOption } from "./modals";
 import { DEFAULT_SETTINGS, WBuilderSettingTab, type SettingsOwner, type WBuilderSettings } from "./settings";
 import { StickerLibrary } from "./stickerLibrary";
 import { syncIndexWithVault } from "./vaultSync";
@@ -39,7 +39,8 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 	private trackingTimer = 0;
 
 	override async onload(): Promise<void> {
-		this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData()) };
+		const saved = (await this.loadData()) as Partial<WBuilderSettings> | null;
+		this.settings = { ...DEFAULT_SETTINGS, ...saved };
 		this.maps = new MapRegistry(this.app);
 		this.stickers = new StickerLibrary(this.app, () => this.settings.stickerFolder);
 
@@ -62,7 +63,7 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		this.registerView(VIEW_TYPE_FAMILY, (leaf) => new FamilyTreeView(leaf, world));
 		this.addSettingTab(new WBuilderSettingTab(this.app, this));
 
-		this.addRibbonIcon("map", "Open WBuilder map", () => void this.openMap());
+		this.addRibbonIcon("map", "Open world map", () => void this.openMap());
 		this.addCommand({ id: "open-map", name: "Open map", callback: () => void this.openMap() });
 		this.addCommand({ id: "new-map", name: "Create new map", callback: () => this.promptNewMap() });
 		this.addCommand({
@@ -107,7 +108,7 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		});
 		this.addCommand({
 			id: "check-note",
-			name: "Show how WBuilder reads the active note",
+			name: "Show how the active note is read",
 			checkCallback: (checking) => {
 				const file = this.activeNote();
 				if (!file) return false;
@@ -240,10 +241,12 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 	}
 
 	private promptNewMap(): void {
-		new NewMapModal(this.app, async ({ name, seed, size }) => {
-			const file = await this.createMapFile(name, "", seed, size);
-			if (file) await this.openMapFile(file);
-		}).open();
+		new NewMapModal(this.app, ({ name, seed, size }) => void this.createAndOpenMap(name, seed, size)).open();
+	}
+
+	private async createAndOpenMap(name: string, seed: string, size: number): Promise<void> {
+		const file = await this.createMapFile(name, "", seed, size);
+		if (file) await this.openMapFile(file);
 	}
 
 	/** `id` empty means: derive it from the name. */
@@ -320,7 +323,7 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return;
 		let updated: Record<string, unknown> = {};
-		await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+		await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
 			frontmatter.locations = change(frontmatter.locations);
 			updated = { ...frontmatter };
 		});
@@ -341,21 +344,30 @@ export default class WBuilderPlugin extends Plugin implements SettingsOwner {
 			.sort((a, b) => a.localeCompare(b));
 		// a request with no tile (the "+ Character" button) makes a note that isn't placed on the map
 		const placed = request.x !== undefined && request.y !== undefined;
-		new NewNodeModal(this.app, request, this.stickerOptions(), affiliations, (type) => this.folderFor(type), async (result) => {
-			// a sticker equal to the type's default needs no `icon` line
-			const icon = result.icon && result.icon !== defaultStickerFor(result.type).id ? result.icon : undefined;
-			const file = await this.createNote({
-				name: result.name,
-				type: result.type,
-				...(placed ? { map: request.map, x: request.x, y: request.y } : {}),
-				icon,
-				overview: result.overview,
-				affiliations: result.affiliation ? [`[[${result.affiliation}]]`] : undefined,
-				start: result.start,
-				end: result.end,
-			});
-			if (file) this.bus.emit("open-note", { path: file.path });
-		}).open();
+		new NewNodeModal(
+			this.app,
+			request,
+			this.stickerOptions(),
+			affiliations,
+			(type) => this.folderFor(type),
+			(result) => void this.createFromModal(request, placed, result),
+		).open();
+	}
+
+	private async createFromModal(request: CreateNodeRequest, placed: boolean, result: NewNodeResult): Promise<void> {
+		// a sticker equal to the type's default needs no `icon` line
+		const icon = result.icon && result.icon !== defaultStickerFor(result.type).id ? result.icon : undefined;
+		const file = await this.createNote({
+			name: result.name,
+			type: result.type,
+			...(placed ? { map: request.map, x: request.x, y: request.y } : {}),
+			icon,
+			overview: result.overview,
+			affiliations: result.affiliation ? [`[[${result.affiliation}]]`] : undefined,
+			start: result.start,
+			end: result.end,
+		});
+		if (file) this.bus.emit("open-note", { path: file.path });
 	}
 
 	/** The folder a new note of this type is created in (its own folder under the notes folder, unless turned off). */

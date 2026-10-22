@@ -165,7 +165,7 @@ export class NodeIndex {
 	private tile(node: NodeRecord): void {
 		if (!isPin(node)) return;
 		let byTile = this.tiles.get(node.map);
-		if (!byTile) this.tiles.set(node.map, (byTile = new Map()));
+		if (!byTile) this.tiles.set(node.map, (byTile = new Map<string, Set<string>>()));
 		const key = tileKey(node.x, node.y);
 		let paths = byTile.get(key);
 		if (!paths) byTile.set(key, (paths = new Set()));

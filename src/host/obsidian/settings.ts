@@ -42,6 +42,10 @@ export class WBuilderSettingTab extends PluginSettingTab {
 	}
 
 	override display(): void {
+		this.render();
+	}
+
+	private render(): void {
 		const { containerEl, owner } = this;
 		containerEl.empty();
 
@@ -68,7 +72,7 @@ export class WBuilderSettingTab extends PluginSettingTab {
 				toggle.setValue(owner.settings.sortByType).onChange(async (value) => {
 					owner.settings.sortByType = value;
 					await owner.saveSettings();
-					this.display();
+					this.render();
 				}),
 			);
 
@@ -94,7 +98,7 @@ export class WBuilderSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Sticker folder")
-			.setDesc("Images in this folder (PNG, JPG, GIF, WebP, SVG) show up in the sticker palette.")
+			.setDesc("Image files in this folder show up in the sticker palette.")
 			.addText((text) =>
 				text
 					.setPlaceholder("Stickers")
